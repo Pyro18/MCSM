@@ -100,7 +100,7 @@ MCSM/
 
 1. 📥 Clone the repository
 ```bash
-git clone https://github.com/yourusername/MCSM.git
+git clone https://github.com/Pyro18/MCSM.git
 ```
 
 2. 📂 Open the solution in Visual Studio or Rider
