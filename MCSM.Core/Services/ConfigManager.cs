@@ -3,12 +3,14 @@
 using MCSM.Core.Models;
 using MCSM.Core.Utils;
 using System.Text.Json;
+using System;
 
 public class ConfigManager
 {
     private readonly string _configPath;
     private readonly FileHelper _fileHelper;
     private readonly Logger _logger;
+    private readonly SemaphoreSlim _saveLock = new SemaphoreSlim(1, 1);
 
     public ConfigManager()
     {
@@ -22,10 +24,18 @@ public class ConfigManager
 
     public async Task SaveServerConfigAsync(ServerConfig config)
     {
-        var path = Path.Combine(_configPath, "server-config.json");
-        var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-        await File.WriteAllTextAsync(path, json);
-        _logger.Log($"Configurazione server salvata in: {path}", LogEntry.LogLevel.Info);
+        await _saveLock.WaitAsync();
+        try
+        {
+            var path = Path.Combine(_configPath, "server-config.json");
+            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            await _fileHelper.WriteAllTextSafeAsync(path, json);
+            _logger.Log($"Server configuration saved to: {path}", LogEntry.LogLevel.Info);
+        }
+        finally
+        {
+            _saveLock.Release();
+        }
     }
 
     public async Task<ServerConfig> LoadServerConfigAsync()
@@ -34,7 +44,15 @@ public class ConfigManager
         if (!File.Exists(path))
             return new ServerConfig();
 
-        var json = await File.ReadAllTextAsync(path);
-        return JsonSerializer.Deserialize<ServerConfig>(json);
+        try
+        {
+            var json = await _fileHelper.ReadAllTextSafeAsync(path);
+            return JsonSerializer.Deserialize<ServerConfig>(json) ?? new ServerConfig();
+        }
+        catch (Exception ex)
+        {
+            _logger.Log($"Error loading server config: {ex.Message}", LogEntry.LogLevel.Error);
+            return new ServerConfig();
+        }
     }
 }

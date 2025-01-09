@@ -1,6 +1,7 @@
 ﻿using MCSM.Core.Services;
 using MCSM.Core.Models;
 using MCSM.Desktop.Controls;
+using MCSM.Core.Utils;
 
 namespace MCSM.Desktop.Forms;
 
@@ -8,6 +9,11 @@ public partial class MainForm : Form
 {
     private readonly ServerManager _serverManager;
     private readonly ConfigManager _configManager;
+    private readonly Logger _logger;
+    private ServerConfig _currentConfig;
+    private DateTime _serverStartTime;
+    private ServerStatusControl _statusControl;
+    private ConsoleControl _consoleControl;
     
     public MainForm()
     {
@@ -15,6 +21,8 @@ public partial class MainForm : Form
         
         _serverManager = new ServerManager();
         _configManager = new ConfigManager();
+        _logger = new Logger();
+        _currentConfig = new ServerConfig();
         
         InitializeCustomComponents();
         SetupEventHandlers();
@@ -36,20 +44,20 @@ public partial class MainForm : Form
             Padding = new Padding(10)
         };
 
-        var serverStatus = new ServerStatusControl
+        _statusControl = new ServerStatusControl
         {
             Dock = DockStyle.Fill,
             BorderStyle = BorderStyle.FixedSingle
         };
-        mainLayout.Controls.Add(serverStatus, 1, 0);
+        mainLayout.Controls.Add(_statusControl, 1, 0);
 
-        var console = new ConsoleControl
+        _consoleControl = new ConsoleControl
         {
             Dock = DockStyle.Fill,
             BorderStyle = BorderStyle.FixedSingle
         };
-        mainLayout.SetColumnSpan(console, 2);
-        mainLayout.Controls.Add(console, 0, 1);
+        mainLayout.SetColumnSpan(_consoleControl, 2);
+        mainLayout.Controls.Add(_consoleControl, 0, 1);
 
         var controlPanel = new Panel
         {
@@ -59,7 +67,7 @@ public partial class MainForm : Form
 
         var startButton = new Button
         {
-            Text = "Avvia Server",
+            Text = "Start Server",
             Dock = DockStyle.Top,
             Height = 40,
             Margin = new Padding(5)
@@ -68,7 +76,7 @@ public partial class MainForm : Form
 
         var stopButton = new Button
         {
-            Text = "Ferma Server",
+            Text = "Stop Server",
             Dock = DockStyle.Top,
             Height = 40,
             Margin = new Padding(5)
@@ -77,7 +85,7 @@ public partial class MainForm : Form
 
         var configButton = new Button
         {
-            Text = "Configurazione",
+            Text = "Configuration",
             Dock = DockStyle.Top,
             Height = 40,
             Margin = new Padding(5)
@@ -97,22 +105,63 @@ public partial class MainForm : Form
         this.Controls.Add(mainLayout);
     }
 
-    private void StartServer_Click(object sender, EventArgs e)
+    private async void StartServer_Click(object sender, EventArgs e)
     {
-        // TODO: Implements the server start
+        try
+        {
+            if (_serverManager.IsServerRunning)
+            {
+                MessageBox.Show("Server is already running!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_currentConfig.ServerPath) || !File.Exists(_currentConfig.ServerPath))
+            {
+                MessageBox.Show("Please configure the server path first!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            _serverStartTime = DateTime.Now;
+            await _serverManager.StartServer(_currentConfig);
+            
+            // Start updating the status
+            StartStatusUpdates();
+            
+            _logger.Log("Server started successfully", LogEntry.LogLevel.Info);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error starting server: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _logger.Log($"Error starting server: {ex.Message}", LogEntry.LogLevel.Error);
+        }
     }
 
-    private void StopServer_Click(object sender, EventArgs e)
+    private async void StopServer_Click(object sender, EventArgs e)
     {
-        // TODO: Implement the server stop
+        try
+        {
+            if (!_serverManager.IsServerRunning)
+            {
+                MessageBox.Show("Server is not running!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            await _serverManager.StopServer();
+            _logger.Log("Server stopped successfully", LogEntry.LogLevel.Info);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error stopping server: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _logger.Log($"Error stopping server: {ex.Message}", LogEntry.LogLevel.Error);
+        }
     }
 
     private void ConfigButton_Click(object sender, EventArgs e)
     {
-        using var configForm = new ServerConfigForm(_configManager, new ServerConfig());
+        using var configForm = new ServerConfigForm(_configManager, _currentConfig);
         if (configForm.ShowDialog() == DialogResult.OK)
         {
-            // TODO: Implement server save configuration
+            SaveServerConfigurations();
         }
     }
 
@@ -121,11 +170,48 @@ public partial class MainForm : Form
         this.Load += MainForm_Load;
         this.FormClosing += MainForm_FormClosing;
         
+        _logger.OnLogAdded += (sender, entry) =>
+        {
+            if (_consoleControl != null && !IsDisposed)
+            {
+                _consoleControl.AppendLog(entry);
+            }
+        };
     }
 
-    private void MainForm_Load(object sender, EventArgs e)
+    private void StartStatusUpdates()
     {
-        LoadServerConfigurations();
+        var timer = new System.Windows.Forms.Timer
+        {
+            Interval = 1000 // Update every second
+        };
+
+        timer.Tick += (sender, e) =>
+        {
+            if (!_serverManager.IsServerRunning)
+            {
+                timer.Stop();
+                _statusControl.UpdateStatus(false);
+                return;
+            }
+
+            var uptime = DateTime.Now - _serverStartTime;
+            // TODO: Get actual player count and memory usage
+            _statusControl.UpdateStatus(
+                isOnline: true,
+                uptime: uptime,
+                players: 0,
+                maxPlayers: _currentConfig.MaxPlayers,
+                memoryUsage: 0
+            );
+        };
+
+        timer.Start();
+    }
+
+    private async void MainForm_Load(object sender, EventArgs e)
+    {
+        await LoadServerConfigurations();
     }
 
     private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
@@ -134,18 +220,20 @@ public partial class MainForm : Form
         StopServerIfRunning();
     }
 
-    private void LoadServerConfigurations()
+    private async Task LoadServerConfigurations()
     {
         try
         {
-            // TODO: Implement the server configurations loading
+            _currentConfig = await _configManager.LoadServerConfigAsync();
+            _logger.Log("Server configurations loaded successfully", LogEntry.LogLevel.Info);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Errore nel caricamento delle configurazioni: {ex.Message}",
-                          "Errore",
+            MessageBox.Show($"Error loading configurations: {ex.Message}",
+                          "Error",
                           MessageBoxButtons.OK,
                           MessageBoxIcon.Error);
+            _logger.Log($"Error loading configurations: {ex.Message}", LogEntry.LogLevel.Error);
         }
     }
 
@@ -153,14 +241,16 @@ public partial class MainForm : Form
     {
         try
         {
-            // TODO: Implement the server configurations saving
+            _configManager.SaveServerConfigAsync(_currentConfig).Wait();
+            _logger.Log("Server configurations saved successfully", LogEntry.LogLevel.Info);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Errore nel salvataggio delle configurazioni: {ex.Message}",
-                          "Errore",
+            MessageBox.Show($"Error saving configurations: {ex.Message}",
+                          "Error",
                           MessageBoxButtons.OK,
                           MessageBoxIcon.Error);
+            _logger.Log($"Error saving configurations: {ex.Message}", LogEntry.LogLevel.Error);
         }
     }
 
@@ -168,14 +258,19 @@ public partial class MainForm : Form
     {
         try
         {
-            _serverManager.StopServer();
+            if (_serverManager.IsServerRunning)
+            {
+                _serverManager.StopServer().Wait();
+                _logger.Log("Server stopped during application shutdown", LogEntry.LogLevel.Info);
+            }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Errore nell'arresto del server: {ex.Message}",
-                          "Errore",
+            MessageBox.Show($"Error stopping server: {ex.Message}",
+                          "Error",
                           MessageBoxButtons.OK,
                           MessageBoxIcon.Warning);
+            _logger.Log($"Error stopping server during shutdown: {ex.Message}", LogEntry.LogLevel.Error);
         }
     }
 }

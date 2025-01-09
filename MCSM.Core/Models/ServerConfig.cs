@@ -2,6 +2,7 @@
 
 public class ServerConfig
 {
+    // Server Settings
     public string ServerVersion { get; set; }
     public int MemoryMin { get; set; } = 1024;
     public int MemoryMax { get; set; } = 2048;
@@ -17,4 +18,19 @@ public class ServerConfig
     public bool OnlineMode { get; set; } = true;
     public string ServerPath { get; set; }
     public List<string> EnabledPlugins { get; set; } = new();
+
+    // Application Settings
+    public bool AutoStartServer { get; set; }
+    public bool CheckUpdatesOnStartup { get; set; } = true;
+    public bool MinimizeToTray { get; set; } = true;
+    public int BackupIntervalHours { get; set; } = 24;
+    public string BackupFolderPath { get; set; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "MCSM",
+        "backups"
+    );
+    public bool EnableLogging { get; set; } = true;
+    public LogEntry.LogLevel MinimumLogLevel { get; set; } = LogEntry.LogLevel.Info;
+    public bool DeleteOldBackups { get; set; } = true;
+    public int KeepBackupsForDays { get; set; } = 7;
 }
