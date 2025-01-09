@@ -13,93 +13,17 @@ public class UpdateManager
     private readonly string _versionsPath;
     private readonly HttpClient _httpClient;
     private const string MOJANG_VERSION_MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
-    private const string PAPERMC_API = "https://api.papermc.io/v2/projects/paper";
+    private const string PAPERMC_API_BASE = "https://api.papermc.io/v2/projects/paper";
 
     public UpdateManager()
     {
         _logger = new Logger();
         _versionsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "versions");
         _httpClient = new HttpClient();
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", "MCSM/1.0");
         
         if (!Directory.Exists(_versionsPath))
             Directory.CreateDirectory(_versionsPath);
-    }
-
-    public async Task<List<string>> GetAvailableVersions()
-    {
-        try
-        {
-            // First try to get versions from PaperMC API
-            var paperVersions = await GetPaperMCVersions();
-            if (paperVersions.Any())
-                return paperVersions;
-
-            // Fallback to Mojang versions if PaperMC fails
-            return await GetMojangVersions();
-        }
-        catch (Exception ex)
-        {
-            _logger.Log($"Error retrieving versions: {ex.Message}", LogEntry.LogLevel.Error);
-            // Return some fallback versions in case both APIs fail
-            return new List<string> { "1.20.4", "1.20.2", "1.19.4" };
-        }
-    }
-
-    private async Task<List<string>> GetPaperMCVersions()
-    {
-        try
-        {
-            var response = await _httpClient.GetStringAsync(PAPERMC_API);
-            var paperData = JsonSerializer.Deserialize<PaperVersionResponse>(response);
-            
-            return paperData?.Versions?
-                .Where(v => !v.Contains("snapshot") && !v.Contains("pre"))
-                .OrderByDescending(Version.Parse)
-                .Take(10)
-                .ToList() ?? new List<string>();
-        }
-        catch (Exception ex)
-        {
-            _logger.Log($"Error retrieving PaperMC versions: {ex.Message}", LogEntry.LogLevel.Warning);
-            return new List<string>();
-        }
-    }
-
-    private async Task<List<string>> GetMojangVersions()
-    {
-        try
-        {
-            var response = await _httpClient.GetStringAsync(MOJANG_VERSION_MANIFEST);
-            var mojangData = JsonSerializer.Deserialize<MojangVersionManifest>(response);
-            
-            return mojangData?.Versions?
-                .Where(v => v.Type == "release")
-                .OrderByDescending(v => v.ReleaseTime)
-                .Take(10)
-                .Select(v => v.Id)
-                .ToList() ?? new List<string>();
-        }
-        catch (Exception ex)
-        {
-            _logger.Log($"Error retrieving Mojang versions: {ex.Message}", LogEntry.LogLevel.Error);
-            return new List<string>();
-        }
-    }
-
-    public async Task<string> DownloadServerJar(string version)
-    {
-        // Try PaperMC first
-        try
-        {
-            return await DownloadPaperMCServer(version);
-        }
-        catch (Exception ex)
-        {
-            _logger.Log($"Failed to download PaperMC server: {ex.Message}. Trying vanilla server...", LogEntry.LogLevel.Warning);
-        }
-
-        // Fallback to vanilla server
-        return await DownloadVanillaServer(version);
     }
 
     private async Task<string> DownloadPaperMCServer(string version)
@@ -112,19 +36,183 @@ public class UpdateManager
             return jarPath;
         }
 
-        // Get latest build number for the version
-        var buildsResponse = await _httpClient.GetStringAsync($"{PAPERMC_API}/versions/{version}");
-        var buildData = JsonSerializer.Deserialize<PaperBuildsResponse>(buildsResponse);
-        var latestBuild = buildData?.Builds?.Max() ?? throw new Exception("No builds found");
+        try
+        {
+            var buildsUrl = $"{PAPERMC_API_BASE}/versions/{version}/builds";
+            _logger.Log($"Fetching builds from: {buildsUrl}", LogEntry.LogLevel.Debug);
+            
+            var buildsResponse = await _httpClient.GetStringAsync(buildsUrl);
+            _logger.Log($"Builds response: {buildsResponse}", LogEntry.LogLevel.Debug);
+            
+            var buildData = JsonSerializer.Deserialize<BuildsResponse>(buildsResponse);
+            
+            if (buildData?.Builds == null || !buildData.Builds.Any())
+            {
+                throw new Exception($"No builds found for version {version}");
+            }
+            
+            var latestBuild = buildData.Builds
+                .Where(b => b.Channel == "default" && b.Downloads.ContainsKey("application"))
+                .OrderByDescending(b => b.Build)
+                .FirstOrDefault() 
+                ?? throw new Exception($"No suitable builds found for version {version}");
+            
+            var buildNumber = latestBuild.Build;
+            var downloadFileName = $"paper-{version}-{buildNumber}.jar";
+            var downloadUrl = $"{PAPERMC_API_BASE}/versions/{version}/builds/{buildNumber}/downloads/{downloadFileName}";
 
-        // Download the server jar
-        var downloadUrl = $"{PAPERMC_API}/versions/{version}/builds/{latestBuild}/downloads/paper-{version}-{latestBuild}.jar";
-        var jarBytes = await _httpClient.GetByteArrayAsync(downloadUrl);
+            _logger.Log($"Downloading from: {downloadUrl}", LogEntry.LogLevel.Debug);
+            
+            var response = await _httpClient.GetAsync(downloadUrl);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Download failed ({response.StatusCode}): {error}");
+            }
+
+            var jarBytes = await response.Content.ReadAsByteArrayAsync();
+            await File.WriteAllBytesAsync(jarPath, jarBytes);
+            
+            _logger.Log($"Successfully downloaded PaperMC version {version} (build {buildNumber})", LogEntry.LogLevel.Info);
+            return jarPath;
+        }
+        catch (Exception ex)
+        {
+            _logger.Log($"Error downloading PaperMC server: {ex}", LogEntry.LogLevel.Error);
+            throw;
+        }
+    }
+
+    public async Task<List<string>> GetAvailableVersions(bool isPaperMC = true)
+    {
+        try
+        {
+            if (isPaperMC)
+            {
+                var response = await _httpClient.GetStringAsync(PAPERMC_API_BASE);
+                _logger.Log($"PaperMC API Response: {response}", LogEntry.LogLevel.Debug);
+                
+                var paperData = JsonSerializer.Deserialize<ProjectResponse>(response);
+                
+                if (paperData?.Versions == null || !paperData.Versions.Any())
+                {
+                    _logger.Log("No versions found in PaperMC response", LogEntry.LogLevel.Warning);
+                    return new List<string>();
+                }
+
+                return paperData.Versions
+                    .Where(v => !v.Contains("pre"))
+                    .OrderByDescending(Version.Parse)
+                    .ToList();
+            }
+            else
+            {
+                return await GetMojangVersions();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Log($"Error retrieving versions: {ex}", LogEntry.LogLevel.Error);
+            throw;
+        }
+    }
+
+
+    private async Task<List<string>> GetPaperMCVersions()
+    {
+        try
+        {
+            var response = await _httpClient.GetStringAsync(PAPERMC_API_BASE);
+            _logger.Log($"PaperMC API Response: {response}", LogEntry.LogLevel.Debug);
         
-        await File.WriteAllBytesAsync(jarPath, jarBytes);
-        _logger.Log($"Successfully downloaded PaperMC version {version} (build {latestBuild}) to {jarPath}", LogEntry.LogLevel.Info);
+            var projectData = JsonSerializer.Deserialize<ProjectResponse>(response);
         
-        return jarPath;
+            if (projectData?.Versions == null || !projectData.Versions.Any())
+            {
+                _logger.Log("No versions found in PaperMC response", LogEntry.LogLevel.Warning);
+                return new List<string>();
+            }
+
+            var versions = projectData.Versions
+                .Where(v => !v.Contains("pre") && !v.Contains("snapshot"))
+                .OrderByDescending(v => Version.Parse(v))
+                .ToList();
+
+            _logger.Log($"Found {versions.Count} available PaperMC versions", LogEntry.LogLevel.Info);
+            return versions;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Log($"HTTP error fetching PaperMC versions: {ex.Message}", LogEntry.LogLevel.Error);
+            throw new Exception("Failed to retrieve PaperMC versions. Check your internet connection.", ex);
+        }
+        catch (JsonException ex)
+        {
+            _logger.Log($"Error parsing PaperMC response: {ex.Message}", LogEntry.LogLevel.Error);
+            throw new Exception("Failed to parse PaperMC version information.", ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.Log($"Unexpected error fetching PaperMC versions: {ex}", LogEntry.LogLevel.Error);
+            throw new Exception("An unexpected error occurred while retrieving PaperMC versions.", ex);
+        }
+    }
+
+
+    private async Task<List<string>> GetMojangVersions()
+    {
+        try
+        {
+            _logger.Log($"Richiesta a: {MOJANG_VERSION_MANIFEST}", LogEntry.LogLevel.Debug);
+            using var request = new HttpRequestMessage(HttpMethod.Get, MOJANG_VERSION_MANIFEST);
+            using var response = await _httpClient.SendAsync(request);
+            
+            _logger.Log($"Stato risposta Mojang: {response.StatusCode}", LogEntry.LogLevel.Debug);
+            response.EnsureSuccessStatusCode();
+            
+            var content = await response.Content.ReadAsStringAsync();
+            _logger.Log($"Contenuto risposta Mojang: {content}", LogEntry.LogLevel.Debug);
+            
+            var mojangData = JsonSerializer.Deserialize<MojangVersionManifest>(content);
+            
+            if (mojangData?.Versions == null || !mojangData.Versions.Any())
+            {
+                _logger.Log("Nessuna versione trovata nella risposta Mojang", LogEntry.LogLevel.Warning);
+                return new List<string>();
+            }
+
+            var versions = mojangData.Versions
+                .Where(v => v.Type == "release")
+                .OrderByDescending(v => v.ReleaseTime)
+                .Take(10)
+                .Select(v => v.Id)
+                .ToList();
+
+            _logger.Log($"Versioni Mojang filtrate: {string.Join(", ", versions)}", LogEntry.LogLevel.Info);
+            return versions;
+        }
+        catch (Exception ex)
+        {
+            _logger.Log($"Errore nel recupero versioni Mojang: {ex}", LogEntry.LogLevel.Error);
+            throw;
+        }
+    }
+
+    public async Task<string> DownloadServerJar(string version, bool isPaperMC = true)
+    {
+        if (isPaperMC)
+        {
+            try
+            {
+                return await DownloadPaperMCServer(version);
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"Failed to download PaperMC server: {ex.Message}. Trying vanilla server...", LogEntry.LogLevel.Warning);
+            }
+        }
+
+        return await DownloadVanillaServer(version);
     }
 
     private async Task<string> DownloadVanillaServer(string version)
