@@ -51,7 +51,7 @@ public partial class ServerStatusControl : UserControl
     {
         updateTimer = new System.Windows.Forms.Timer
         {
-            Interval = 1000 // Aggiorna ogni secondo
+            Interval = 1000
         };
         updateTimer.Tick += UpdateTimer_Tick;
         updateTimer.Start();
@@ -59,7 +59,6 @@ public partial class ServerStatusControl : UserControl
 
     private void UpdateTimer_Tick(object sender, EventArgs e)
     {
-        // Qui aggiorneremo i valori in tempo reale
         UpdateStatus();
     }
 
