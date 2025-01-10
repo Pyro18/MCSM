@@ -7,25 +7,28 @@ namespace MCSM.Desktop.Forms;
 
 public partial class MainForm : Form
 {
-    private readonly ServerManager _serverManager;
+    private readonly ServerListManager _serverListManager;
     private readonly ConfigManager _configManager;
     private readonly Logger _logger;
-    private ServerConfig _currentConfig;
-    private DateTime _serverStartTime;
+    private ServerInfo _currentServer;
+    private ServerListControl _serverListControl;
     private ServerStatusControl _statusControl;
     private ConsoleControl _consoleControl;
+    private System.Windows.Forms.Timer _statusUpdateTimer;
+    private NotifyIcon _trayIcon;
     
     public MainForm()
     {
         InitializeComponent();
         
-        _serverManager = new ServerManager();
+        _serverListManager = new ServerListManager();
         _configManager = new ConfigManager();
         _logger = new Logger();
-        _currentConfig = new ServerConfig();
         
         InitializeCustomComponents();
+        InitializeTrayIcon();
         SetupEventHandlers();
+        SetupStatusTimer();
     }
     
     private void InitializeCustomComponents()
@@ -36,6 +39,7 @@ public partial class MainForm : Form
             this.Icon = new Icon(Path.Combine(Application.StartupPath, "assets", "icon.ico"));
         }
         
+        // Main layout
         TableLayoutPanel mainLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -43,132 +47,149 @@ public partial class MainForm : Form
             RowCount = 2,
             Padding = new Padding(10)
         };
-
-        _statusControl = new ServerStatusControl
+        
+        // Server list panel (left side)
+        var leftPanel = new Panel
         {
             Dock = DockStyle.Fill,
             BorderStyle = BorderStyle.FixedSingle
         };
-        mainLayout.Controls.Add(_statusControl, 1, 0);
-
+        
+        var addServerButton = new Button
+        {
+            Text = "Add Server",
+            Dock = DockStyle.Top,
+            Height = 30,
+            Margin = new Padding(5)
+        };
+        addServerButton.Click += AddServer_Click;
+        
+        _serverListControl = new ServerListControl(_serverListManager)
+        {
+            Dock = DockStyle.Fill
+        };
+        
+        leftPanel.Controls.Add(_serverListControl);
+        leftPanel.Controls.Add(addServerButton);
+        
+        // Status and control panel (top right)
+        var rightTopPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        
+        _statusControl = new ServerStatusControl
+        {
+            Dock = DockStyle.Fill
+        };
+        
+        var buttonPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 40,
+            FlowDirection = FlowDirection.LeftToRight,
+            Padding = new Padding(5)
+        };
+        
+        var startButton = new Button
+        {
+            Text = "Start Server",
+            Width = 100,
+            Height = 30
+        };
+        startButton.Click += async (s, e) => await StartCurrentServer();
+        
+        var stopButton = new Button
+        {
+            Text = "Stop Server",
+            Width = 100,
+            Height = 30
+        };
+        stopButton.Click += async (s, e) => await StopCurrentServer();
+        
+        var configButton = new Button
+        {
+            Text = "Settings",
+            Width = 100,
+            Height = 30
+        };
+        configButton.Click += ConfigButton_Click;
+        
+        buttonPanel.Controls.AddRange(new Control[] { startButton, stopButton, configButton });
+        
+        rightTopPanel.Controls.Add(_statusControl);
+        rightTopPanel.Controls.Add(buttonPanel);
+        
+        // Console panel (bottom right)
         _consoleControl = new ConsoleControl
         {
             Dock = DockStyle.Fill,
             BorderStyle = BorderStyle.FixedSingle
         };
-        mainLayout.SetColumnSpan(_consoleControl, 2);
-        mainLayout.Controls.Add(_consoleControl, 0, 1);
-
-        var controlPanel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BorderStyle = BorderStyle.FixedSingle
-        };
-
-        var startButton = new Button
-        {
-            Text = "Start Server",
-            Dock = DockStyle.Top,
-            Height = 40,
-            Margin = new Padding(5)
-        };
-        startButton.Click += StartServer_Click;
-
-        var stopButton = new Button
-        {
-            Text = "Stop Server",
-            Dock = DockStyle.Top,
-            Height = 40,
-            Margin = new Padding(5)
-        };
-        stopButton.Click += StopServer_Click;
-
-        var configButton = new Button
-        {
-            Text = "Configuration",
-            Dock = DockStyle.Top,
-            Height = 40,
-            Margin = new Padding(5)
-        };
-        configButton.Click += ConfigButton_Click;
-
-        controlPanel.Controls.Add(configButton);
-        controlPanel.Controls.Add(stopButton);
-        controlPanel.Controls.Add(startButton);
-        mainLayout.Controls.Add(controlPanel, 0, 0);
-
+        
+        // Add all panels to main layout
+        mainLayout.Controls.Add(leftPanel, 0, 0);
+        mainLayout.SetRowSpan(leftPanel, 2);
+        mainLayout.Controls.Add(rightTopPanel, 1, 0);
+        mainLayout.Controls.Add(_consoleControl, 1, 1);
+        
+        // Configure layout
         mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
         mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70F));
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 30F));
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 70F));
-
+        
         this.Controls.Add(mainLayout);
     }
-
-    private async void StartServer_Click(object sender, EventArgs e)
+    
+    private void InitializeTrayIcon()
     {
-        try
+        _trayIcon = new NotifyIcon
         {
-            if (_serverManager.IsServerRunning)
-            {
-                MessageBox.Show("Server is already running!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            if (string.IsNullOrEmpty(_currentConfig.ServerPath) || !File.Exists(_currentConfig.ServerPath))
-            {
-                MessageBox.Show("Please configure the server path first!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            _serverStartTime = DateTime.Now;
-            await _serverManager.StartServer(_currentConfig);
-            
-            // Start updating the status
-            StartStatusUpdates();
-            
-            _logger.Log("Server started successfully", LogEntry.LogLevel.Info);
-        }
-        catch (Exception ex)
+            Icon = this.Icon,
+            Text = "MCSM - Minecraft Server Manager",
+            Visible = false
+        };
+        
+        var trayMenu = new ContextMenuStrip();
+        trayMenu.Items.Add("Show", null, (s, e) => 
         {
-            MessageBox.Show($"Error starting server: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            _logger.Log($"Error starting server: {ex.Message}", LogEntry.LogLevel.Error);
-        }
+            this.Show();
+            this.WindowState = FormWindowState.Normal;
+            _trayIcon.Visible = false;
+        });
+        
+        trayMenu.Items.Add("Exit", null, (s, e) => 
+        {
+            _trayIcon.Visible = false;
+            Application.Exit();
+        });
+        
+        _trayIcon.ContextMenuStrip = trayMenu;
+        
+        _trayIcon.DoubleClick += (s, e) => 
+        {
+            this.Show();
+            this.WindowState = FormWindowState.Normal;
+            _trayIcon.Visible = false;
+        };
     }
-
-    private async void StopServer_Click(object sender, EventArgs e)
+    
+    private void SetupStatusTimer()
     {
-        try
+        _statusUpdateTimer = new System.Windows.Forms.Timer
         {
-            if (!_serverManager.IsServerRunning)
-            {
-                MessageBox.Show("Server is not running!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            await _serverManager.StopServer();
-            _logger.Log("Server stopped successfully", LogEntry.LogLevel.Info);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error stopping server: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            _logger.Log($"Error stopping server: {ex.Message}", LogEntry.LogLevel.Error);
-        }
+            Interval = 1000 // Update every second
+        };
+        
+        _statusUpdateTimer.Tick += (s, e) => UpdateStatusDisplay();
+        _statusUpdateTimer.Start();
     }
-
-    private void ConfigButton_Click(object sender, EventArgs e)
-    {
-        using var configForm = new ServerConfigForm(_configManager, _currentConfig);
-        if (configForm.ShowDialog() == DialogResult.OK)
-        {
-            SaveServerConfigurations();
-        }
-    }
-
+    
     private void SetupEventHandlers()
     {
-        this.Load += MainForm_Load;
-        this.FormClosing += MainForm_FormClosing;
+        _serverListControl.OnServerSelected += ServerListControl_OnServerSelected;
         
         _logger.OnLogAdded += (sender, entry) =>
         {
@@ -177,100 +198,183 @@ public partial class MainForm : Form
                 _consoleControl.AppendLog(entry);
             }
         };
+        
+        this.Resize += MainForm_Resize;
     }
-
-    private void StartStatusUpdates()
+    
+    private void MainForm_Resize(object sender, EventArgs e)
     {
-        var timer = new System.Windows.Forms.Timer
+        if (WindowState == FormWindowState.Minimized)
         {
-            Interval = 1000 // Update every second
-        };
-
-        timer.Tick += (sender, e) =>
-        {
-            if (!_serverManager.IsServerRunning)
+            var config = _configManager.LoadServerConfigAsync().Result;
+            if (config.MinimizeToTray)
             {
-                timer.Stop();
-                _statusControl.UpdateStatus(false);
-                return;
+                this.Hide();
+                _trayIcon.Visible = true;
             }
-
-            var uptime = DateTime.Now - _serverStartTime;
-            // TODO: Get actual player count and memory usage
-            _statusControl.UpdateStatus(
-                isOnline: true,
-                uptime: uptime,
-                players: 0,
-                maxPlayers: _currentConfig.MaxPlayers,
-                memoryUsage: 0
-            );
-        };
-
-        timer.Start();
+        }
     }
-
-    private async void MainForm_Load(object sender, EventArgs e)
+    
+    private void ServerListControl_OnServerSelected(object sender, ServerInfo server)
     {
-        await LoadServerConfigurations();
+        _currentServer = server;
+        UpdateStatusDisplay();
+        
+        // Clear and load server logs
+        _consoleControl.Clear();
+        LoadServerLogs();
     }
-
-    private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+    
+    private async void LoadServerLogs()
     {
-        SaveServerConfigurations();
-        StopServerIfRunning();
-    }
-
-    private async Task LoadServerConfigurations()
-    {
+        if (_currentServer == null) return;
+        
         try
         {
-            _currentConfig = await _configManager.LoadServerConfigAsync();
-            _logger.Log("Server configurations loaded successfully", LogEntry.LogLevel.Info);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error loading configurations: {ex.Message}",
-                          "Error",
-                          MessageBoxButtons.OK,
-                          MessageBoxIcon.Error);
-            _logger.Log($"Error loading configurations: {ex.Message}", LogEntry.LogLevel.Error);
-        }
-    }
-
-    private void SaveServerConfigurations()
-    {
-        try
-        {
-            _configManager.SaveServerConfigAsync(_currentConfig).Wait();
-            _logger.Log("Server configurations saved successfully", LogEntry.LogLevel.Info);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error saving configurations: {ex.Message}",
-                          "Error",
-                          MessageBoxButtons.OK,
-                          MessageBoxIcon.Error);
-            _logger.Log($"Error saving configurations: {ex.Message}", LogEntry.LogLevel.Error);
-        }
-    }
-
-    private void StopServerIfRunning()
-    {
-        try
-        {
-            if (_serverManager.IsServerRunning)
+            var logs = await _logger.GetRecentLogs();
+            foreach (var log in logs)
             {
-                _serverManager.StopServer().Wait();
-                _logger.Log("Server stopped during application shutdown", LogEntry.LogLevel.Info);
+                _consoleControl.AppendLog(log);
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error stopping server: {ex.Message}",
-                          "Error",
-                          MessageBoxButtons.OK,
-                          MessageBoxIcon.Warning);
-            _logger.Log($"Error stopping server during shutdown: {ex.Message}", LogEntry.LogLevel.Error);
+            _logger.Log($"Error loading server logs: {ex.Message}", LogEntry.LogLevel.Error);
+        }
+    }
+    
+    private void UpdateStatusDisplay()
+    {
+        if (_currentServer != null && _serverListManager != null)
+        {
+            var serverManager = _serverListManager.GetServerManager(_currentServer.Id);
+            if (serverManager != null)
+            {
+                var status = serverManager.GetStatus();
+                TimeSpan uptime = status.IsRunning ? DateTime.Now - _currentServer.LastStarted : TimeSpan.Zero;
+            
+                _statusControl.UpdateStatus(
+                    isOnline: status.IsRunning,
+                    uptime: uptime,
+                    players: status.CurrentPlayers,
+                    maxPlayers: status.MaxPlayers,
+                    memoryUsage: status.MemoryUsage
+                );
+            }
+        }
+    }
+    
+    private async Task StartCurrentServer()
+    {
+        if (_currentServer == null)
+        {
+            MessageBox.Show("Please select a server first", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        
+        try
+        {
+            await _serverListManager.StartServer(_currentServer.Id);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error starting server: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+    
+    private async Task StopCurrentServer()
+    {
+        if (_currentServer == null)
+        {
+            MessageBox.Show("Please select a server first", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        
+        try
+        {
+            await _serverListManager.StopServer(_currentServer.Id);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error stopping server: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+    
+    private void AddServer_Click(object sender, EventArgs e)
+    {
+        using var addServerForm = new AddServerForm(_serverListManager);
+        addServerForm.ShowDialog(this);
+    }
+    
+    private void ConfigButton_Click(object sender, EventArgs e)
+    {
+        if (_currentServer == null)
+        {
+            MessageBox.Show("Please select a server first", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        
+        using var configForm = new ServerConfigForm(_configManager, _currentServer.Config);
+        if (configForm.ShowDialog(this) == DialogResult.OK)
+        {
+            _serverListManager.UpdateServerConfig(_currentServer.Id, _currentServer.Config);
+        }
+    }
+    
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (e.CloseReason == CloseReason.UserClosing)
+        {
+            var runningServers = _serverListManager.GetServers()
+                .Where(s => s.Status == ServerStatus.Running)
+                .ToList();
+                
+            if (runningServers.Any())
+            {
+                var result = MessageBox.Show(
+                    "There are servers still running. Do you want to stop them before closing?",
+                    "Servers Running",
+                    MessageBoxButtons.YesNoCancel,
+                    MessageBoxIcon.Warning);
+                    
+                switch (result)
+                {
+                    case DialogResult.Yes:
+                        StopAllServers();
+                        break;
+                    case DialogResult.Cancel:
+                        e.Cancel = true;
+                        return;
+                }
+            }
+        }
+        
+        _statusUpdateTimer?.Stop();
+        _statusUpdateTimer?.Dispose();
+        _trayIcon?.Dispose();
+        
+        base.OnFormClosing(e);
+    }
+    
+    
+    
+    private async void StopAllServers()
+    {
+        var runningServers = _serverListManager.GetServers()
+            .Where(s => s.Status == ServerStatus.Running)
+            .ToList();
+            
+        foreach (var server in runningServers)
+        {
+            try
+            {
+                await _serverListManager.StopServer(server.Id);
+                _logger.Log($"Server '{server.Name}' stopped during application shutdown", LogEntry.LogLevel.Info);
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"Error stopping server '{server.Name}' during shutdown: {ex.Message}", LogEntry.LogLevel.Error);
+            }
         }
     }
 }

@@ -10,9 +10,12 @@ public partial class ServerConfigForm : Form
     private readonly ConfigManager _configManager;
     private readonly UpdateManager _updateManager;
     private ServerConfig _currentConfig;
+    private bool _isDownloading = false;
+    private readonly Logger _logger;
+
     private TableLayoutPanel _mainLayout;
-    private ComboBox _serverVersionBox;
     private ComboBox _serverTypeBox;
+    private ComboBox _serverVersionBox;
     private TextBox _serverPathBox;
     private Button _downloadButton;
     private Button _saveButton;
@@ -27,19 +30,108 @@ public partial class ServerConfigForm : Form
     private CheckBox _commandBlockBox;
     private TextBox _motdBox;
     private CheckBox _onlineModeBox;
-    private bool _isDownloading = false;
-    private Logger _logger = new Logger();
 
     public ServerConfigForm(ConfigManager configManager, ServerConfig currentConfig)
     {
+        if (configManager == null)
+            throw new ArgumentNullException(nameof(configManager));
+            
         _configManager = configManager;
+        _currentConfig = currentConfig ?? new ServerConfig();
         _updateManager = new UpdateManager();
-        _currentConfig = currentConfig;
+        _logger = new Logger();
+
+        CreateControls();
         InitializeComponent();
-        LoadVersionsAsync();
         LoadConfig();
+        _ = LoadVersionsAsync();
     }
 
+    private void CreateControls()
+    {
+        _mainLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10),
+            RowCount = 15,
+            ColumnCount = 3
+        };
+
+        _serverTypeBox = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 300
+        };
+        _serverTypeBox.Items.AddRange(new[] { "PaperMC", "Vanilla" });
+        _serverTypeBox.SelectedIndex = 0;
+        _serverTypeBox.SelectedIndexChanged += ServerType_Changed;
+
+        _serverVersionBox = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 300
+        };
+
+        _serverPathBox = new TextBox { Width = 250 };
+        _downloadButton = new Button { Text = "Download", Width = 80 };
+        _downloadButton.Click += DownloadServer_Click;
+
+        _javaPathBox = new TextBox { Width = 300 };
+
+        _memoryMinBox = new NumericUpDown
+        {
+            Minimum = 512,
+            Maximum = 32768,
+            Value = 1024,
+            Increment = 512
+        };
+
+        _memoryMaxBox = new NumericUpDown
+        {
+            Minimum = 512,
+            Maximum = 32768,
+            Value = 2048,
+            Increment = 512
+        };
+
+        _portBox = new NumericUpDown
+        {
+            Minimum = 1025,
+            Maximum = 65535,
+            Value = 25565
+        };
+
+        _serverIpBox = new TextBox { Text = "0.0.0.0" };
+        _worldNameBox = new TextBox { Text = "world" };
+
+        _maxPlayersBox = new NumericUpDown
+        {
+            Minimum = 1,
+            Maximum = 100,
+            Value = 20
+        };
+
+        _difficultyBox = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+        _difficultyBox.Items.AddRange(new[] { "peaceful", "easy", "normal", "hard" });
+        _difficultyBox.SelectedIndex = 2;
+
+        _commandBlockBox = new CheckBox { Text = "Enable Command Blocks" };
+        _motdBox = new TextBox { Text = "A Minecraft Server" };
+        _onlineModeBox = new CheckBox { Text = "Online Mode (Premium)" };
+        _onlineModeBox.Checked = true;
+
+        _saveButton = new Button
+        {
+            Text = "Save",
+            DialogResult = DialogResult.OK,
+            Width = 80
+        };
+        _saveButton.Click += SaveButton_Click;
+    }
+    
     private void InitializeComponent()
     {
         this.Size = new Size(600, 550);
@@ -49,59 +141,37 @@ public partial class ServerConfigForm : Form
         this.MinimizeBox = false;
         this.StartPosition = FormStartPosition.CenterParent;
 
-        _mainLayout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(10),
-            RowCount = 15,
-            ColumnCount = 3
-        };
-
         int currentRow = 0;
 
         // Server Type Selection
         _mainLayout.Controls.Add(new Label { Text = "Server Type:" }, 0, currentRow);
-        _serverTypeBox = new ComboBox 
-        { 
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Width = 300
-        };
-        _serverTypeBox.Items.AddRange(new[] { "PaperMC", "Vanilla" });
-        _serverTypeBox.SelectedIndex = 0;
-        _serverTypeBox.SelectedIndexChanged += ServerType_Changed;
         _mainLayout.Controls.Add(_serverTypeBox, 1, currentRow++);
 
         // Version Selection
         _mainLayout.Controls.Add(new Label { Text = "Version:" }, 0, currentRow);
-        _serverVersionBox = new ComboBox 
-        { 
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Width = 300
-        };
         _mainLayout.Controls.Add(_serverVersionBox, 1, currentRow++);
 
-        // Server Path with Download button
+        // Server Path
         _mainLayout.Controls.Add(new Label { Text = "Server Path:" }, 0, currentRow);
         var pathPanel = new FlowLayoutPanel 
         { 
             Dock = DockStyle.Fill,
             AutoSize = true
         };
-        _serverPathBox = new TextBox { Width = 300 };
-        _downloadButton = new Button { Text = "Download", Width = 80 };
-        _downloadButton.Click += DownloadServer_Click;
-        pathPanel.Controls.AddRange(new Control[] { _serverPathBox, _downloadButton });
+        var browseServerButton = new Button { Text = "Browse", Width = 60 };
+        browseServerButton.Click += BrowseServerPath_Click;
+
+        pathPanel.Controls.AddRange(new Control[] { _serverPathBox, browseServerButton, _downloadButton });
         _mainLayout.Controls.Add(pathPanel, 1, currentRow++);
         _mainLayout.SetColumnSpan(pathPanel, 2);
 
-        // Java Path with Browse button
+        // Java Path
         _mainLayout.Controls.Add(new Label { Text = "Java Path:" }, 0, currentRow);
         var javaPathPanel = new FlowLayoutPanel 
         { 
             Dock = DockStyle.Fill,
             AutoSize = true
         };
-        _javaPathBox = new TextBox { Width = 300 };
         var browseJavaButton = new Button { Text = "Browse", Width = 80 };
         browseJavaButton.Click += BrowseJavaPath_Click;
         var detectJavaButton = new Button { Text = "Detect", Width = 80 };
@@ -112,72 +182,34 @@ public partial class ServerConfigForm : Form
 
         // Memory Settings
         _mainLayout.Controls.Add(new Label { Text = "Min Memory (MB):" }, 0, currentRow);
-        _memoryMinBox = new NumericUpDown 
-        { 
-            Minimum = 512,
-            Maximum = 32768,
-            Value = 1024,
-            Increment = 512
-        };
         _mainLayout.Controls.Add(_memoryMinBox, 1, currentRow++);
 
         _mainLayout.Controls.Add(new Label { Text = "Max Memory (MB):" }, 0, currentRow);
-        _memoryMaxBox = new NumericUpDown
-        {
-            Minimum = 512,
-            Maximum = 32768,
-            Value = 2048,
-            Increment = 512
-        };
         _mainLayout.Controls.Add(_memoryMaxBox, 1, currentRow++);
 
         // Network Settings
         _mainLayout.Controls.Add(new Label { Text = "Port:" }, 0, currentRow);
-        _portBox = new NumericUpDown
-        {
-            Minimum = 1025,
-            Maximum = 65535,
-            Value = 25565
-        };
         _mainLayout.Controls.Add(_portBox, 1, currentRow++);
 
         _mainLayout.Controls.Add(new Label { Text = "Server IP:" }, 0, currentRow);
-        _serverIpBox = new TextBox { Text = "0.0.0.0" };
         _mainLayout.Controls.Add(_serverIpBox, 1, currentRow++);
 
         // World Settings
         _mainLayout.Controls.Add(new Label { Text = "World Name:" }, 0, currentRow);
-        _worldNameBox = new TextBox { Text = "world" };
         _mainLayout.Controls.Add(_worldNameBox, 1, currentRow++);
 
         _mainLayout.Controls.Add(new Label { Text = "Max Players:" }, 0, currentRow);
-        _maxPlayersBox = new NumericUpDown
-        {
-            Minimum = 1,
-            Maximum = 100,
-            Value = 20
-        };
         _mainLayout.Controls.Add(_maxPlayersBox, 1, currentRow++);
 
         _mainLayout.Controls.Add(new Label { Text = "Difficulty:" }, 0, currentRow);
-        _difficultyBox = new ComboBox
-        {
-            DropDownStyle = ComboBoxStyle.DropDownList
-        };
-        _difficultyBox.Items.AddRange(new[] { "peaceful", "easy", "normal", "hard" });
-        _difficultyBox.SelectedIndex = 2; // normal
         _mainLayout.Controls.Add(_difficultyBox, 1, currentRow++);
 
         // Game Settings
-        _commandBlockBox = new CheckBox { Text = "Enable Command Blocks" };
         _mainLayout.Controls.Add(_commandBlockBox, 1, currentRow++);
 
         _mainLayout.Controls.Add(new Label { Text = "MOTD:" }, 0, currentRow);
-        _motdBox = new TextBox { Text = "A Minecraft Server" };
         _mainLayout.Controls.Add(_motdBox, 1, currentRow++);
 
-        _onlineModeBox = new CheckBox { Text = "Online Mode (Premium)" };
-        _onlineModeBox.Checked = true;
         _mainLayout.Controls.Add(_onlineModeBox, 1, currentRow++);
 
         // Buttons
@@ -189,27 +221,37 @@ public partial class ServerConfigForm : Form
             Padding = new Padding(5)
         };
 
-        _saveButton = new Button
-        {
-            Text = "Save",
-            DialogResult = DialogResult.OK
-        };
-        _saveButton.Click += SaveButton_Click;
-
         var cancelButton = new Button
         {
             Text = "Cancel",
-            DialogResult = DialogResult.Cancel
+            DialogResult = DialogResult.Cancel,
+            Width = 80
         };
 
-        buttonPanel.Controls.AddRange(new Control[] { _saveButton, cancelButton });
+        buttonPanel.Controls.AddRange(new Control[] { cancelButton, _saveButton });
 
+        // Add final layouts
         this.Controls.AddRange(new Control[] { _mainLayout, buttonPanel });
 
         // Set column styles
         _mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+    }
+    
+    private void BrowseServerPath_Click(object sender, EventArgs e)
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Select Server Installation Directory",
+            UseDescriptionForTitle = true,
+            InitialDirectory = _serverPathBox.Text
+        };
+
+        if (dialog.ShowDialog() == DialogResult.OK)
+        {
+            _serverPathBox.Text = dialog.SelectedPath;
+        }
     }
 
     private async Task LoadVersionsAsync()
@@ -223,62 +265,95 @@ public partial class ServerConfigForm : Form
             _downloadButton.Enabled = false;
 
             bool isPaperMC = _serverTypeBox.SelectedItem?.ToString() == "PaperMC";
-        
-            using var loadingForm = new LoadingForm("Loading versions...");
-            loadingForm.Show(this);
-        
+            
+            using var loadingForm = new LoadingForm("Testing connection...");
+            if (this.IsHandleCreated && !this.IsDisposed)
+            {
+                loadingForm.Show(this);
+            }
+            
+            loadingForm.Text = "Loading versions...";
+            
             var versions = await Task.Run(async () => 
                 await _updateManager.GetAvailableVersions(isPaperMC));
-        
+            
             loadingForm.Close();
-        
+            
             _serverVersionBox.Items.Clear();
-        
-            if (versions.Count == 0)
+            
+            if (versions == null || versions.Count == 0)
             {
                 throw new Exception("No versions available");
             }
 
-            _serverVersionBox.Items.AddRange(versions.ToArray());
-        
+            foreach (var version in versions)
+            {
+                if (!string.IsNullOrEmpty(version))
+                {
+                    _serverVersionBox.Items.Add(version);
+                }
+            }
+
             // Select current version if exists, otherwise select latest
-            var currentVersion = versions.FirstOrDefault(v => v == _currentConfig.ServerVersion) ?? versions[0];
-            _serverVersionBox.SelectedItem = currentVersion;
+            if (_currentConfig != null && !string.IsNullOrEmpty(_currentConfig.ServerVersion) && 
+                _serverVersionBox.Items.Contains(_currentConfig.ServerVersion))
+            {
+                _serverVersionBox.SelectedItem = _currentConfig.ServerVersion;
+            }
+            else if (_serverVersionBox.Items.Count > 0)
+            {
+                _serverVersionBox.SelectedIndex = 0;
+            }
+
+            _logger.Log("Versions loaded successfully", LogEntry.LogLevel.Info);
         }
         catch (HttpRequestException ex)
         {
+            _logger.Log($"Network error: {ex.Message}", LogEntry.LogLevel.Error);
             ShowErrorWithRetry(
                 "Network Error",
-                "Failed to retrieve versions. Please check your internet connection and try again.",
+                $"Failed to retrieve versions. Please check your internet connection.\nError: {ex.Message}",
                 ex);
         }
         catch (Exception ex)
         {
+            _logger.Log($"Error loading versions: {ex.Message}", LogEntry.LogLevel.Error);
             ShowErrorWithRetry(
                 "Error",
-                "An unexpected error occurred while loading versions.",
+                $"An unexpected error occurred while loading versions.\nError: {ex.Message}",
                 ex);
         }
         finally
         {
             _serverVersionBox.Enabled = true;
             _downloadButton.Enabled = true;
+            
+            // Se non ci sono versioni dopo il tentativo di caricamento, aggiungi un messaggio di errore
+            if (_serverVersionBox.Items.Count == 0)
+            {
+                _serverVersionBox.Items.Add("No versions available");
+                _serverVersionBox.SelectedIndex = 0;
+                _downloadButton.Enabled = false;
+            }
         }
     }
     
     private void ShowErrorWithRetry(string title, string message, Exception ex)
     {
         _logger.Log($"{message} Details: {ex}", LogEntry.LogLevel.Error);
-    
-        var result = MessageBox.Show(
-            $"{message}\n\nWould you like to retry?",
-            title,
-            MessageBoxButtons.RetryCancel,
-            MessageBoxIcon.Error);
-        
-        if (result == DialogResult.Retry)
+
+        if (this.IsHandleCreated && !this.IsDisposed)
         {
-            LoadVersionsAsync().ConfigureAwait(false);
+            var result = MessageBox.Show(
+                $"{message}\n\nWould you like to retry?",
+                title,
+                MessageBoxButtons.RetryCancel,
+                MessageBoxIcon.Error);
+        
+            if (result == DialogResult.Retry)
+            {
+                _ = LoadVersionsAsync();
+            }
         }
     } 
     
@@ -353,21 +428,57 @@ public partial class ServerConfigForm : Form
         var defaultPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "MCSM",
-            "servers",
-            "default"
+            "server"
         );
-
-        // Ensure the directory exists
-        Directory.CreateDirectory(Path.GetDirectoryName(defaultPath)!);
+        
+        Directory.CreateDirectory(defaultPath);
 
         return defaultPath;
     }
+
 
     private void LoadConfig()
     {
         if (_currentConfig == null) return;
 
-        _serverPathBox.Text = _currentConfig.ServerPath ?? GetDefaultServerPath();
+        var serverDir = _currentConfig.ServerPath;
+        if (!string.IsNullOrEmpty(serverDir))
+        {
+            try
+            {
+                if (Path.GetExtension(serverDir).Equals(".jar", StringComparison.OrdinalIgnoreCase))
+                {
+                    _serverPathBox.Text = serverDir;
+                }
+                else 
+                {
+                    if (Directory.Exists(serverDir))
+                    {
+                        var jarFiles = Directory.GetFiles(serverDir, "*.jar")
+                            .Where(f => f.Contains("paper") || f.Contains("minecraft_server"));
+                        
+                        var serverJar = jarFiles.OrderByDescending(f => File.GetLastWriteTime(f))
+                            .FirstOrDefault();
+                        
+                        _serverPathBox.Text = serverJar ?? serverDir;
+                    }
+                    else
+                    {
+                        _serverPathBox.Text = serverDir;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"Error loading server path: {ex.Message}", LogEntry.LogLevel.Error);
+                _serverPathBox.Text = serverDir;
+            }
+        }
+        else
+        {
+            _serverPathBox.Text = GetDefaultServerPath();
+        }
+        
         _memoryMinBox.Value = _currentConfig.MemoryMin;
         _memoryMaxBox.Value = _currentConfig.MemoryMax;
         _javaPathBox.Text = _currentConfig.JavaPath ?? "java";
@@ -385,19 +496,32 @@ public partial class ServerConfigForm : Form
     {
         try
         {
-            if (string.IsNullOrEmpty(_serverPathBox.Text) || !File.Exists(_serverPathBox.Text))
+            var serverPath = _serverPathBox.Text;
+            var serverDirectory = serverPath;
+            
+            if (Path.GetExtension(serverPath).Equals(".jar", StringComparison.OrdinalIgnoreCase))
             {
-                MessageBox.Show("Please download or select a valid server JAR file first", 
+                serverDirectory = Path.GetDirectoryName(serverPath);
+            }
+            
+            var jarPath = Directory.GetFiles(serverDirectory, "*.jar")
+                .FirstOrDefault(f => f.Contains("paper") || f.Contains("minecraft_server"));
+                                 
+            if (string.IsNullOrEmpty(jarPath))
+            {
+                MessageBox.Show("The selected directory does not contain a valid server JAR file", 
                     "Error", 
                     MessageBoxButtons.OK, 
                     MessageBoxIcon.Error);
                 return;
             }
 
+            _currentConfig.ServerPath = jarPath;
+
+            //-- Save the configuration --//
             _saveButton.Enabled = false;
-        
             _currentConfig.ServerVersion = _serverVersionBox.SelectedItem?.ToString();
-            _currentConfig.ServerPath = _serverPathBox.Text;
+            _currentConfig.ServerPath = serverPath; // Salviamo il path della directory
             _currentConfig.MemoryMin = (int)_memoryMinBox.Value;
             _currentConfig.MemoryMax = (int)_memoryMaxBox.Value;
             _currentConfig.JavaPath = _javaPathBox.Text;
@@ -447,14 +571,25 @@ public partial class ServerConfigForm : Form
                 MessageBox.Show("Please select a version first", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
+        
+            // Create a temporary ServerInfo for the download
+            var serverInfo = new ServerInfo
+            {
+                Name = Path.GetFileName(Path.GetDirectoryName(_currentConfig.ServerPath)),
+                Version = selectedVersion,
+                IsPaperMC = _serverTypeBox.SelectedItem?.ToString() == "PaperMC",
+                Config = _currentConfig
+            };
 
-            var serverPath = await _updateManager.DownloadServerJar(selectedVersion);
-            _serverPathBox.Text = serverPath;
+            var jarPath = await _updateManager.DownloadServerJar(serverInfo);
+            _serverPathBox.Text = jarPath;
+        
             MessageBox.Show("Server downloaded successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Error downloading server: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _logger.Log($"Error downloading server: {ex.Message}", LogEntry.LogLevel.Error);
         }
         finally
         {
