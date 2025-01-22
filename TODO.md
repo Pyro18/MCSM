@@ -3,8 +3,8 @@
 ## Core Features
 
 ### Java Management
-- [ ] Implementare l'auto-detection di Java nelle impostazioni
-- [ ] Aggiungere la validazione del percorso Java
+- [x] Implementare l'auto-detection di Java nelle impostazioni
+- [x] Aggiungere la validazione del percorso Java
 - [ ] Salvare il percorso Java nelle impostazioni
 - [ ] Aggiungere supporto per multiple versioni di Java
 

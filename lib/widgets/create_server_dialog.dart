@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,9 +26,17 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   @override
   void initState() {
     super.initState();
-    // Imposta il percorso Java automaticamente
-    ref.read(javaPathProvider).whenData((path) {
-      // Qui potresti salvare il percorso in un provider di configurazione
+    _setDefaultPath();
+  }
+
+  void _setDefaultPath() {
+    // Imposta il percorso predefinito basato sul sistema operativo
+    final defaultPath = Platform.isWindows
+        ? '${Platform.environment['USERPROFILE']}\\AppData\\Roaming\\MCSM\\servers'
+        : '${Platform.environment['HOME']}/.mcsm/servers';
+    
+    setState(() {
+      _path = defaultPath;
     });
   }
 
@@ -43,16 +52,17 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
     }
   }
 
+
   Future<void> _createServer() async {
     if (_formKey.currentState!.validate() && _version != null) {
       setState(() => _isLoading = true);
-      
+
       try {
         final service = ref.read(minecraftServiceProvider);
         await service.downloadServer(_version!, _serverType, _path, _name);
-        
+
         // Qui aggiungeremmo la logica per salvare la configurazione del server
-        
+
         if (mounted) {
           Navigator.of(context).pop();
         }
@@ -72,10 +82,11 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
       }
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final versionsAsync = ref.watch(availableVersionsProvider(_serverType));
-
+    
     return Dialog(
       child: Container(
         width: 500,
@@ -94,7 +105,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Server Type
               SegmentedButton<ServerType>(
                 segments: const [
@@ -118,7 +129,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                 },
               ),
               const SizedBox(height: 16),
-              
+
               // Server Name
               TextFormField(
                 decoration: const InputDecoration(
@@ -134,7 +145,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                 onChanged: (value) => _name = value,
               ),
               const SizedBox(height: 16),
-              
+
               // Version
               versionsAsync.when(
                 data: (versions) => DropdownButtonFormField<String>(
@@ -142,10 +153,12 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                     labelText: 'Version',
                   ),
                   value: _version,
-                  items: versions.map((v) => DropdownMenuItem<String>(
-                    value: v.id,
-                    child: Text(v.id),
-                  )).toList(),
+                  items: versions
+                      .map((v) => DropdownMenuItem<String>(
+                            value: v.id,
+                            child: Text(v.id),
+                          ))
+                      .toList(),
                   validator: (value) {
                     if (value == null) {
                       return 'Please select a version';
@@ -162,7 +175,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                 error: (error, stack) => Text('Error loading versions: $error'),
               ),
               const SizedBox(height: 16),
-              
+
               // Server Path
               Row(
                 children: [
@@ -187,10 +200,15 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                     icon: const Icon(Icons.folder_open),
                     tooltip: 'Select Path',
                   ),
+                  IconButton(
+                    onPressed: _setDefaultPath,
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Reset to Default',
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
-              
+
               // Port
               TextFormField(
                 decoration: const InputDecoration(
@@ -214,7 +232,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                 },
               ),
               const SizedBox(height: 16),
-              
+
               // Memory
               TextFormField(
                 decoration: const InputDecoration(
@@ -239,7 +257,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                 },
               ),
               const SizedBox(height: 16),
-              
+
               // Auto Start
               SwitchListTile(
                 title: const Text('Auto-start with application'),
@@ -250,13 +268,14 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                 contentPadding: EdgeInsets.zero,
               ),
               const SizedBox(height: 24),
-              
+
               // Actions
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                    onPressed:
+                        _isLoading ? null : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 8),

@@ -1,14 +1,17 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import '../services/java_service.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _javaPath = '';
   String _defaultServerPath = '';
   bool _startMinimized = false;
@@ -16,8 +19,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _checkUpdatesAutomatically = true;
   String _backupLocation = '';
   bool _autoBackup = true;
-  int _backupFrequency = 24; // hours
+  int _backupFrequency = 24;
   bool _isLoading = false;
+  bool _isSearchingJava = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _detectJavaPath();
+    _setDefaultServerPath();
+  }
+
+  Future<void> _detectJavaPath() async {
+    setState(() => _isSearchingJava = true);
+    try {
+      final javaService = JavaService();
+      final installations = await javaService.detectJavaInstallations();
+      if (installations.isNotEmpty) {
+        setState(() {
+          _javaPath = installations.first.path;
+        });
+      }
+    } finally {
+      setState(() => _isSearchingJava = false);
+    }
+  }
+
+  void _setDefaultServerPath() {
+    final defaultPath = Platform.isWindows
+        ? '${Platform.environment['USERPROFILE']}\\AppData\\Roaming\\MCSM\\servers'
+        : '${Platform.environment['HOME']}/.mcsm/servers';
+    setState(() {
+      _defaultServerPath = defaultPath;
+    });
+  }
 
   Future<void> _selectJavaPath() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -34,13 +69,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _selectDefaultServerPath() async {
-    String? result = await FilePicker.platform.getDirectoryPath(
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
       dialogTitle: 'Select Default Server Location',
     );
-
-    if (result != null) {
+    
+    if (selectedDirectory != null) {
       setState(() {
-        _defaultServerPath = result;
+        _defaultServerPath = selectedDirectory;
       });
     }
   }
@@ -88,24 +123,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Widget _buildSection(String title, List<Widget> children) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        ...children,
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -148,126 +165,168 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Java Settings
-                  _buildSection(
+                  const Text(
                     'Java Settings',
-                    [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              decoration: const InputDecoration(
-                                labelText: 'Java Path',
-                              ),
-                              readOnly: true,
-                              controller: TextEditingController(text: _javaPath),
-                            ),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          decoration: InputDecoration(
+                            labelText: 'Java Path',
+                            suffixIcon: _isSearchingJava 
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : null,
                           ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: _selectJavaPath,
-                            icon: const Icon(Icons.folder_open),
-                          ),
-                        ],
+                          readOnly: true,
+                          controller: TextEditingController(text: _javaPath),
+                        ),
                       ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              decoration: const InputDecoration(
-                                labelText: 'Default Server Location',
-                              ),
-                              readOnly: true,
-                              controller: TextEditingController(text: _defaultServerPath),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: _selectDefaultServerPath,
-                            icon: const Icon(Icons.folder_open),
-                          ),
-                        ],
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: _selectJavaPath,
+                        icon: const Icon(Icons.folder_open),
+                        tooltip: 'Select Java Path',
+                      ),
+                      IconButton(
+                        onPressed: _detectJavaPath,
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Auto Detect Java',
                       ),
                     ],
                   ),
+                  const SizedBox(height: 32),
+
+                  // Server Location
+                  const Text(
+                    'Server Location',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          decoration: const InputDecoration(
+                            labelText: 'Default Server Location',
+                          ),
+                          readOnly: true,
+                          controller: TextEditingController(text: _defaultServerPath),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: _selectDefaultServerPath,
+                        icon: const Icon(Icons.folder_open),
+                        tooltip: 'Select Server Path',
+                      ),
+                      IconButton(
+                        onPressed: _setDefaultServerPath,
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Reset to Default',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
 
                   // Application Settings
-                  _buildSection(
+                  const Text(
                     'Application Settings',
-                    [
-                      SwitchListTile(
-                        title: const Text('Start Minimized'),
-                        subtitle: const Text('Start the application minimized to system tray'),
-                        value: _startMinimized,
-                        onChanged: (value) => setState(() => _startMinimized = value),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Close to Tray'),
-                        subtitle: const Text('Minimize to system tray when closing the window'),
-                        value: _closeToTray,
-                        onChanged: (value) => setState(() => _closeToTray = value),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Check Updates Automatically'),
-                        subtitle: const Text('Automatically check for application updates'),
-                        value: _checkUpdatesAutomatically,
-                        onChanged: (value) => setState(() => _checkUpdatesAutomatically = value),
-                      ),
-                    ],
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: const Text('Start Minimized'),
+                    subtitle: const Text('Start the application minimized to system tray'),
+                    value: _startMinimized,
+                    onChanged: (value) => setState(() => _startMinimized = value),
+                  ),
+                  SwitchListTile(
+                    title: const Text('Close to Tray'),
+                    subtitle: const Text('Minimize to system tray when closing the window'),
+                    value: _closeToTray,
+                    onChanged: (value) => setState(() => _closeToTray = value),
+                  ),
+                  SwitchListTile(
+                    title: const Text('Check Updates Automatically'),
+                    subtitle: const Text('Automatically check for application updates'),
+                    value: _checkUpdatesAutomatically,
+                    onChanged: (value) => setState(() => _checkUpdatesAutomatically = value),
+                  ),
+                  const SizedBox(height: 32),
 
                   // Backup Settings
-                  _buildSection(
+                  const Text(
                     'Backup Settings',
-                    [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              decoration: const InputDecoration(
-                                labelText: 'Backup Location',
-                              ),
-                              readOnly: true,
-                              controller: TextEditingController(text: _backupLocation),
-                            ),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          decoration: const InputDecoration(
+                            labelText: 'Backup Location',
                           ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: _selectBackupLocation,
-                            icon: const Icon(Icons.folder_open),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      SwitchListTile(
-                        title: const Text('Automatic Backups'),
-                        subtitle: const Text('Enable automatic server backups'),
-                        value: _autoBackup,
-                        onChanged: (value) => setState(() => _autoBackup = value),
-                      ),
-                      if (_autoBackup) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                decoration: const InputDecoration(
-                                  labelText: 'Backup Frequency (hours)',
-                                  suffixText: 'hours',
-                                ),
-                                keyboardType: TextInputType.number,
-                                initialValue: _backupFrequency.toString(),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _backupFrequency = int.tryParse(value) ?? 24;
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
+                          readOnly: true,
+                          controller: TextEditingController(text: _backupLocation),
                         ),
-                      ],
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: _selectBackupLocation,
+                        icon: const Icon(Icons.folder_open),
+                        tooltip: 'Select Backup Location',
+                      ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: const Text('Automatic Backups'),
+                    subtitle: const Text('Enable automatic server backups'),
+                    value: _autoBackup,
+                    onChanged: (value) => setState(() => _autoBackup = value),
+                  ),
+                  if (_autoBackup) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            decoration: const InputDecoration(
+                              labelText: 'Backup Frequency (hours)',
+                              suffixText: 'hours',
+                            ),
+                            keyboardType: TextInputType.number,
+                            initialValue: _backupFrequency.toString(),
+                            onChanged: (value) {
+                              setState(() {
+                                _backupFrequency = int.tryParse(value) ?? 24;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
