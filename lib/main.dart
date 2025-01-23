@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:mcsm/storage/app_storage.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mcsm/screens/home_screen.dart';
 import 'package:mcsm/theme/app_theme.dart';
+import 'services/providers/storage_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
+
+  final storage = AppStorage();
+  await storage.init();
 
   WindowOptions windowOptions = const WindowOptions(
     size: Size(1200, 800),
@@ -16,7 +21,7 @@ void main() async {
     titleBarStyle: TitleBarStyle.normal,
     title: 'MCSM - Minecraft Server Manager',
   );
-  
+
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
     await windowManager.focus();

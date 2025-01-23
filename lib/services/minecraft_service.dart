@@ -100,15 +100,14 @@ class MinecraftService {
   bool _isVersionSupported(String version) {
     try {
       final parts = version.split('.');
-      final major = int.parse(parts[1]); // es: 1.8.9 -> 8
-      return major >= 8; // Supportiamo dalla 1.8.x in poi
+      final major = int.parse(parts[1]);
+      return major >= 8;
     } catch (e) {
       return false;
     }
   }
 
   Future<String> downloadServer(String version, ServerType type, String basePath, String serverName) async {
-    // Crea la directory del server
     final serverDir = Directory(path.join(basePath, serverName));
     if (!await serverDir.exists()) {
       await serverDir.create();
@@ -151,7 +150,6 @@ class MinecraftService {
   }
 
   Future<String> _getPaperDownloadUrl(String version) async {
-    // Prima otteniamo tutte le build disponibili per la versione
     final buildsResponse = await http.get(
       Uri.parse('https://api.papermc.io/v2/projects/paper/versions/$version/builds')
     );
@@ -169,12 +167,11 @@ class MinecraftService {
       
       final fileName = 'paper-$version-$buildNumber.jar';
       
-      // L'URL di download corretto secondo l'API
       return 'https://api.papermc.io/v2/projects/paper/versions/$version/builds/$buildNumber/downloads/$fileName';
     }
     throw
     
-     Exception('Failed to get paper builds');
+    Exception('Failed to get paper builds');
   }
 
   Future<String> findJavaPath() async {
@@ -190,7 +187,6 @@ class MinecraftService {
       }
     }
 
-    // Cerca nei percorsi comuni
     final List<String> commonPaths = Platform.isWindows
         ? [
             'C:\\Program Files\\Java',
@@ -203,7 +199,6 @@ class MinecraftService {
 
     for (final String basePath in commonPaths) {
       if (await Directory(basePath).exists()) {
-        // Su Windows cerca nelle sottocartelle
         if (Platform.isWindows) {
           final List<FileSystemEntity> entries = await Directory(basePath)
               .list(recursive: true)
@@ -211,7 +206,6 @@ class MinecraftService {
               .toList();
 
           if (entries.isNotEmpty) {
-            // Prendi il primo java.exe trovato
             return entries.first.path;
           }
         } else if (await File(basePath).exists()) {
@@ -219,8 +213,6 @@ class MinecraftService {
         }
       }
     }
-
-    
     throw Exception('Java installation not found');
   }
 }
