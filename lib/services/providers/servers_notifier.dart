@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../models/minecraft_server.dart';
-import '../../storage/app_storage.dart';
+import '../storage/app_storage.dart';
 import 'storage_provider.dart';
 
 class ServersNotifier extends StateNotifier<AsyncValue<List<MinecraftServer>>> {

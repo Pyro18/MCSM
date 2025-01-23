@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/config_model.dart';
-import '../../storage/app_storage.dart';
+import '../storage/app_storage.dart';
 import 'storage_provider.dart';
 
 class SettingsNotifier extends StateNotifier<AsyncValue<ConfigModel>> {

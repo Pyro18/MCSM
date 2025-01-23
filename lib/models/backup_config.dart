@@ -1,3 +1,6 @@
+import 'dart:io';
+import '../services/storage/storage_config.dart';
+
 class BackupConfig {
   final String backupPath;
   final bool autoBackup;
@@ -12,7 +15,7 @@ class BackupConfig {
   });
 
   factory BackupConfig.fromJson(Map<String, dynamic> json) => BackupConfig(
-    backupPath: json['backupPath'] as String? ?? '',
+    backupPath: json['backupPath'] as String? ?? StorageConfig.backupsPath,
     autoBackup: json['autoBackup'] as bool? ?? true,
     backupFrequency: json['backupFrequency'] as int? ?? 24,
     maxBackups: json['maxBackups'] as int? ?? 5,
@@ -26,7 +29,7 @@ class BackupConfig {
   };
 
   factory BackupConfig.defaults() => BackupConfig(
-    backupPath: '',
+    backupPath: StorageConfig.backupsPath,
     autoBackup: true,
     backupFrequency: 24,
     maxBackups: 5,

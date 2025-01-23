@@ -1,4 +1,5 @@
-import '../storage/storage_config.dart';
+import 'dart:io';
+import '../services/storage/storage_config.dart';
 import './backup_config.dart';
 
 class ConfigModel {
@@ -16,13 +17,18 @@ class ConfigModel {
     this.version = '1.0.0',
   });
 
-  factory ConfigModel.fromJson(Map<String, dynamic> json) => ConfigModel(
-    serverInstallPath: json['serverInstallPath'] ?? StorageConfig.defaultServerPath,
-    javaPath: json['javaPath'] ?? '',
-    autoStart: json['autoStart'] ?? false,
-    backupConfig: BackupConfig.fromJson(json['backup'] ?? {}),
-    version: json['version'] ?? '1.0.0',
-  );
+  factory ConfigModel.fromJson(Map<String, dynamic> json) {
+    // Ensure we have the correct default paths
+    final serverPath = json['serverInstallPath'] ?? StorageConfig.defaultServerPath;
+
+    return ConfigModel(
+      serverInstallPath: serverPath,
+      javaPath: json['javaPath'] ?? '',
+      autoStart: json['autoStart'] ?? false,
+      backupConfig: BackupConfig.fromJson(json['backup'] ?? {}),
+      version: json['version'] ?? '1.0.0',
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'serverInstallPath': serverInstallPath,
@@ -32,10 +38,11 @@ class ConfigModel {
     'version': version,
   };
 
-  // Aggiunto per compatibilità
   factory ConfigModel.defaults() => ConfigModel(
     serverInstallPath: StorageConfig.defaultServerPath,
     javaPath: '',
+    autoStart: false,
     backupConfig: BackupConfig.defaults(),
+    version: '1.0.0',
   );
 }

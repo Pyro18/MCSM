@@ -1,37 +1,58 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:mcsm/storage/app_storage.dart';
+import 'package:mcsm/services/storage/storage_config.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mcsm/screens/home_screen.dart';
-import 'package:mcsm/theme/app_theme.dart';
+import 'screens/home_screen.dart';
+import 'theme/app_theme.dart';
+import 'services/storage/app_storage.dart';
 import 'services/providers/storage_provider.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  final storage = AppStorage();
-  await storage.init();
+    // Inizializza lo storage prima di tutto
+    print('Initializing storage...'); // Debug log
+    final storage = AppStorage();
+    await storage.init();
 
-  WindowOptions windowOptions = const WindowOptions(
-    size: Size(1200, 800),
-    center: true,
-    backgroundColor: Colors.transparent,
-    skipTaskbar: false,
-    titleBarStyle: TitleBarStyle.normal,
-    title: 'MCSM - Minecraft Server Manager',
-  );
+    print('Storage paths:'); // Debug log
+    print('Root path: ${StorageConfig.rootPath}');
+    print('Data path: ${StorageConfig.dataPath}');
+    print('Server path: ${StorageConfig.defaultServerPath}');
+    print('Config path: ${StorageConfig.configPath}');
+    print('Servers file: ${StorageConfig.serversPath}');
 
-  await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
+    // Inizializza window manager
+    await windowManager.ensureInitialized();
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(1200, 800),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+      title: 'MCSM - Minecraft Server Manager',
+    );
 
-  runApp(
-    const ProviderScope(
-      child: MCSMApp(),
-    ),
-  );
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+
+    runApp(
+      ProviderScope(
+        overrides: [
+          appStorageProvider.overrideWithValue(storage),
+        ],
+        child: const MCSMApp(),
+      ),
+    );
+  } catch (e, stack) {
+    print('Error in main: $e');
+    print('Stack trace: $stack');
+    rethrow;
+  }
 }
 
 class MCSMApp extends StatelessWidget {
@@ -44,6 +65,12 @@ class MCSMApp extends StatelessWidget {
       theme: AppTheme.darkTheme,
       debugShowCheckedModeBanner: false,
       home: const HomeScreen(),
+      // Aggiungiamo una direzione esplicita per il testo
+      locale: const Locale('en'),
+      localizationsDelegates: const [
+        DefaultMaterialLocalizations.delegate,
+        DefaultWidgetsLocalizations.delegate,
+      ],
     );
   }
 }
