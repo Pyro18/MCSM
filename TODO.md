@@ -5,8 +5,8 @@
 ### Java Management
 - [x] Implementare l'auto-detection di Java nelle impostazioni
 - [x] Aggiungere la validazione del percorso Java
-- [ ] Salvare il percorso Java nelle impostazioni
-- [ ] Aggiungere supporto per multiple versioni di Java
+- [x] Salvare il percorso Java nelle impostazioni
+- [x] Aggiungere supporto per multiple versioni di Java
 
 ### Server Creation & Management
 - [ ] Implementare una progress bar durante il download del server
@@ -16,14 +16,14 @@
 - [ ] Implementare il sistema di gestione delle versioni dei server
 
 ### UI/UX Improvements
-- [ ] Aggiungere spazi corretti nel layout delle impostazioni
+- [x] Aggiungere spazi corretti nel layout delle impostazioni
 - [ ] Migliorare il responsive design
 - [ ] Aggiungere animazioni di transizione
 - [ ] Implementare temi chiari/scuri
 - [ ] Aggiungere tooltips per le funzionalità
 
 ### Data Management
-- [ ] Decidere e implementare il sistema di storage (SQLite vs JSON)
+- [x] Decidere e implementare il sistema di storage (SQLite vs JSON)
 - [ ] Implementare il sistema di backup delle configurazioni
 - [ ] Creare schema per i dati dei server
 - [ ] Aggiungere sistema di migrazione dei dati
@@ -65,6 +65,10 @@
 - [ ] Implementare lazy loading dei componenti
 - [ ] Aggiungere caching dei dati
 - [ ] Ottimizzare le operazioni di I/O
+
+### Settings
+- [ ] Aggiungere un sistema di modifica dei settings direttamente dal software 
+      (usare vscode come estensione o un blocco note custom)
 
 ### Testing
 - [ ] Aggiungere unit tests
