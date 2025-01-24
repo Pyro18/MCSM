@@ -26,6 +26,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   path: ^1.9.0
   archive: ^4.0.2
+  synchronized: ^3.3.0+3
 
 dev_dependencies:
   flutter_test:

@@ -1,9 +1,10 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../services/minecraft_service.dart';
 import '../services/providers/minecraft_provider.dart';
+import '../services/providers/settings_provider.dart';
 
 class CreateServerDialog extends ConsumerStatefulWidget {
   const CreateServerDialog({super.key});
@@ -26,17 +27,18 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   @override
   void initState() {
     super.initState();
-    _setDefaultPath();
+    // Non settiamo più il path di default qui, verrà gestito nel didChangeDependencies
   }
 
-  void _setDefaultPath() {
-    // Imposta il percorso predefinito basato sul sistema operativo
-    final defaultPath = Platform.isWindows
-        ? '${Platform.environment['USERPROFILE']}\\AppData\\Roaming\\MCSM\\servers'
-        : '${Platform.environment['HOME']}/.mcsm/servers';
-    
-    setState(() {
-      _path = defaultPath;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Legge il path dai settings quando il widget viene costruito o quando i settings cambiano
+    final settingsAsync = ref.read(settingsProvider);
+    settingsAsync.whenData((settings) {
+      setState(() {
+        _path = settings.serverPath;
+      });
     });
   }
 
@@ -44,14 +46,13 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
     String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
       dialogTitle: 'Select Server Directory',
     );
-    
+
     if (selectedDirectory != null) {
       setState(() {
         _path = selectedDirectory;
       });
     }
   }
-
 
   Future<void> _createServer() async {
     if (_formKey.currentState!.validate() && _version != null) {
@@ -60,8 +61,6 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
       try {
         final service = ref.read(minecraftServiceProvider);
         await service.downloadServer(_version!, _serverType, _path, _name);
-
-        // Qui aggiungeremmo la logica per salvare la configurazione del server
 
         if (mounted) {
           Navigator.of(context).pop();
@@ -86,7 +85,12 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   @override
   Widget build(BuildContext context) {
     final versionsAsync = ref.watch(availableVersionsProvider(_serverType));
-    
+    ref.watch(settingsProvider).whenData((settings) {
+      if (_path == settings.serverPath || _path.isEmpty) {
+        _path = settings.serverPath;
+      }
+    });
+
     return Dialog(
       child: Container(
         width: 500,
@@ -199,11 +203,6 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                     onPressed: _selectPath,
                     icon: const Icon(Icons.folder_open),
                     tooltip: 'Select Path',
-                  ),
-                  IconButton(
-                    onPressed: _setDefaultPath,
-                    icon: const Icon(Icons.refresh),
-                    tooltip: 'Reset to Default',
                   ),
                 ],
               ),

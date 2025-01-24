@@ -1,28 +1,26 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:mcsm/services/storage/storage_config.dart';
+import 'package:mcsm/services/providers/settings_provider.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_theme.dart';
-import 'services/storage/app_storage.dart';
-import 'services/providers/storage_provider.dart';
+import 'services/settings_service.dart';
+
 
 void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Inizializza lo storage prima di tutto
-    print('Initializing storage...'); // Debug log
-    final storage = AppStorage();
-    await storage.init();
+    // Inizializza il servizio delle impostazioni
+    final settingsService = SettingsService();
+    await settingsService.init();
 
-    print('Storage paths:'); // Debug log
-    print('Root path: ${StorageConfig.rootPath}');
-    print('Data path: ${StorageConfig.dataPath}');
-    print('Server path: ${StorageConfig.defaultServerPath}');
-    print('Config path: ${StorageConfig.configPath}');
-    print('Servers file: ${StorageConfig.serversPath}');
+    // Debug log delle impostazioni iniziali
+    final settings = await settingsService.loadSettings();
+    print('Settings loaded:');
+    print('Server path: ${settings.serverPath}');
+    print('Java path: ${settings.javaPath}');
+    print('Backup path: ${settings.backupSettings.backupPath}');
 
     // Inizializza window manager
     await windowManager.ensureInitialized();
@@ -43,7 +41,8 @@ void main() async {
     runApp(
       ProviderScope(
         overrides: [
-          appStorageProvider.overrideWithValue(storage),
+          // Override del provider del servizio impostazioni
+          settingsServiceProvider.overrideWithValue(settingsService),
         ],
         child: const MCSMApp(),
       ),
@@ -65,7 +64,6 @@ class MCSMApp extends StatelessWidget {
       theme: AppTheme.darkTheme,
       debugShowCheckedModeBanner: false,
       home: const HomeScreen(),
-      // Aggiungiamo una direzione esplicita per il testo
       locale: const Locale('en'),
       localizationsDelegates: const [
         DefaultMaterialLocalizations.delegate,

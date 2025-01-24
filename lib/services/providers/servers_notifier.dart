@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/minecraft_server.dart';
 import '../storage/app_storage.dart';
-import 'storage_provider.dart';
+
 
 class ServersNotifier extends StateNotifier<AsyncValue<List<MinecraftServer>>> {
   final AppStorage _storage;
@@ -52,8 +52,3 @@ class ServersNotifier extends StateNotifier<AsyncValue<List<MinecraftServer>>> {
     }
   }
 }
-
-final serversProvider = StateNotifierProvider<ServersNotifier, AsyncValue<List<MinecraftServer>>>((ref) {
-  final storage = ref.watch(appStorageProvider);
-  return ServersNotifier(storage);
-});

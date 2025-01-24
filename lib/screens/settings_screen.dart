@@ -1,203 +1,115 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import '../models/settings_model.dart';
+import '../services/providers/settings_provider.dart';
 import '../services/java_service.dart';
-import '../services/providers/settings_notifier.dart';
-import '../models/config_model.dart';
-import '../models/backup_config.dart';
 
-class SettingsScreen extends ConsumerStatefulWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-  @override
-  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
-}
+  Future<void> _selectDirectory(
+      BuildContext context,
+      WidgetRef ref,
+      Settings currentSettings,
+      String title,
+      void Function(String) onSelected,
+      ) async {
+    final result = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: title,
+    );
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  String _javaPath = '';
-  String _defaultServerPath = '';
-  bool _startMinimized = false;
-  bool _closeToTray = true;
-  bool _checkUpdatesAutomatically = true;
-  String _backupLocation = '';
-  bool _autoBackup = true;
-  int _backupFrequency = 24;
-  bool _isLoading = false;
-  bool _isSearchingJava = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCurrentSettings();
-    _detectJavaPath();
-  }
-
-  void _loadCurrentSettings() {
-    final settingsAsync = ref.read(settingsProvider);
-    settingsAsync.whenData((settings) {
-      setState(() {
-        _javaPath = settings.javaPath;
-        _defaultServerPath = settings.serverInstallPath.isNotEmpty
-            ? settings.serverInstallPath
-            : Platform.isWindows
-            ? '${Platform.environment['USERPROFILE']}\\AppData\\Roaming\\MCSM\\servers'
-            : '${Platform.environment['HOME']}/.mcsm/servers';
-        _backupLocation = settings.backupConfig.backupPath.isNotEmpty
-            ? settings.backupConfig.backupPath
-            : Platform.isWindows
-            ? '${Platform.environment['USERPROFILE']}\\AppData\\Roaming\\MCSM\\backups'
-            : '${Platform.environment['HOME']}/.mcsm/backups';
-        _autoBackup = settings.backupConfig.autoBackup;
-        _backupFrequency = settings.backupConfig.backupFrequency;
-        _startMinimized = settings.autoStart;
-      });
-    });
-  }
-
-  void _setDefaultServerPath() {
-    final defaultPath = Platform.isWindows
-        ? '${Platform.environment['USERPROFILE']}\\AppData\\Roaming\\MCSM\\servers'
-        : '${Platform.environment['HOME']}/.mcsm/servers';
-    setState(() {
-      _defaultServerPath = defaultPath;
-    });
-    // _saveSettings();
-  }
-
-  Future<void> _detectJavaPath() async {
-    setState(() => _isSearchingJava = true);
-    try {
-      final javaService = JavaService();
-      final installations = await javaService.detectJavaInstallations();
-      if (installations.isNotEmpty) {
-        setState(() {
-          _javaPath = installations.first.path;
-        });
-      }
-    } finally {
-      setState(() => _isSearchingJava = false);
+    if (result != null) {
+      onSelected(result);
     }
   }
 
-  Future<void> _selectJavaPath() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+  Future<void> _selectJavaPath(
+      BuildContext context,
+      WidgetRef ref,
+      Settings currentSettings,
+      ) async {
+    final result = await FilePicker.platform.pickFiles(
       dialogTitle: 'Select Java Executable',
       type: FileType.custom,
       allowedExtensions: ['exe'],
     );
 
     if (result != null && result.files.isNotEmpty) {
-      setState(() {
-        _javaPath = result.files.first.path ?? '';
-      });
-    }
-  }
-
-  Future<void> _selectDefaultServerPath() async {
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Select Default Server Location',
-    );
-
-    if (selectedDirectory != null) {
-      setState(() {
-        _defaultServerPath = selectedDirectory;
-      });
-    }
-  }
-
-  Future<void> _selectBackupLocation() async {
-    String? result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Select Backup Location',
-    );
-
-    if (result != null) {
-      setState(() {
-        _backupLocation = result;
-      });
-    }
-  }
-
-  Future<void> _saveSettings() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final newConfig = ConfigModel(
-        serverInstallPath: _defaultServerPath,
-        javaPath: _javaPath,
-        autoStart: _startMinimized,
-        backupConfig: BackupConfig(
-          backupPath: _backupLocation,
-          autoBackup: _autoBackup,
-          backupFrequency: _backupFrequency,
-        ),
+      final newSettings = currentSettings.copyWith(
+        javaPath: result.files.first.path!,
       );
+      await ref.read(settingsProvider.notifier).updateSettings(newSettings);
+    }
+  }
 
-      await ref.read(settingsProvider.notifier).updateSettings(newConfig);
+  Future<void> _detectJavaPath(
+      BuildContext context,
+      WidgetRef ref,
+      Settings currentSettings,
+      ) async {
+    try {
+      final javaService = JavaService();
+      final installations = await javaService.detectJavaInstallations();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Settings saved successfully'),
-            backgroundColor: Colors.green,
-          ),
+      if (installations.isNotEmpty) {
+        // Prende la prima installazione trovata
+        final newSettings = currentSettings.copyWith(
+          javaPath: installations.first.path,
         );
+        await ref.read(settingsProvider.notifier).updateSettings(newSettings);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Java installation found successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No Java installation found'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving settings: $e'),
+            content: Text('Error detecting Java: $e'),
             backgroundColor: Colors.red,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final settingsAsync = ref.watch(settingsProvider);
 
-    return settingsAsync.when(
-      data: (_) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: settingsAsync.when(
+        data: (settings) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with save button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Settings',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _saveSettings,
-                  child: _isLoading
-                      ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                      : const Text('Save Changes'),
-                ),
-              ],
+            // Header fisso
+            const Text(
+              'Settings',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 24),
 
-            // Settings content
+            // Contenuto scrollabile
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
@@ -216,28 +128,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       children: [
                         Expanded(
                           child: TextFormField(
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               labelText: 'Java Path',
-                              suffixIcon: _isSearchingJava
-                                  ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                                  : null,
                             ),
                             readOnly: true,
-                            controller: TextEditingController(text: _javaPath),
+                            controller: TextEditingController(text: settings.javaPath),
                           ),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
-                          onPressed: _selectJavaPath,
+                          onPressed: () => _selectJavaPath(context, ref, settings),
                           icon: const Icon(Icons.folder_open),
                           tooltip: 'Select Java Path',
                         ),
                         IconButton(
-                          onPressed: _detectJavaPath,
+                          onPressed: () async {
+                            await _detectJavaPath(context, ref, settings);
+                          },
                           icon: const Icon(Icons.refresh),
                           tooltip: 'Auto Detect Java',
                         ),
@@ -245,9 +152,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Server Location
+                    // Server Settings
                     const Text(
-                      'Server Location',
+                      'Server Settings',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -262,17 +169,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               labelText: 'Default Server Location',
                             ),
                             readOnly: true,
-                            controller: TextEditingController(text: _defaultServerPath),
+                            controller: TextEditingController(text: settings.serverPath),
                           ),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
-                          onPressed: _selectDefaultServerPath,
+                          onPressed: () => _selectDirectory(
+                            context,
+                            ref,
+                            settings,
+                            'Select Server Location',
+                                (path) async {
+                              final newSettings = settings.copyWith(serverPath: path);
+                              await ref.read(settingsProvider.notifier)
+                                  .updateSettings(newSettings);
+                            },
+                          ),
                           icon: const Icon(Icons.folder_open),
                           tooltip: 'Select Server Path',
                         ),
                         IconButton(
-                          onPressed: _setDefaultServerPath,
+                          onPressed: () async {
+                            final newSettings = settings.copyWith(
+                              serverPath: Settings.defaultServerPath,
+                            );
+                            await ref.read(settingsProvider.notifier)
+                                .updateSettings(newSettings);
+                          },
                           icon: const Icon(Icons.refresh),
                           tooltip: 'Reset to Default',
                         ),
@@ -292,20 +215,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     SwitchListTile(
                       title: const Text('Start Minimized'),
                       subtitle: const Text('Start the application minimized to system tray'),
-                      value: _startMinimized,
-                      onChanged: (value) => setState(() => _startMinimized = value),
+                      value: settings.startMinimized,
+                      onChanged: (value) async {
+                        final newSettings = settings.copyWith(startMinimized: value);
+                        await ref.read(settingsProvider.notifier)
+                            .updateSettings(newSettings);
+                      },
                     ),
                     SwitchListTile(
                       title: const Text('Close to Tray'),
                       subtitle: const Text('Minimize to system tray when closing the window'),
-                      value: _closeToTray,
-                      onChanged: (value) => setState(() => _closeToTray = value),
+                      value: settings.closeToTray,
+                      onChanged: (value) async {
+                        final newSettings = settings.copyWith(closeToTray: value);
+                        await ref.read(settingsProvider.notifier)
+                            .updateSettings(newSettings);
+                      },
                     ),
                     SwitchListTile(
-                      title: const Text('Check Updates Automatically'),
+                      title: const Text('Automatic Updates'),
                       subtitle: const Text('Automatically check for application updates'),
-                      value: _checkUpdatesAutomatically,
-                      onChanged: (value) => setState(() => _checkUpdatesAutomatically = value),
+                      value: settings.autoUpdate,
+                      onChanged: (value) async {
+                        final newSettings = settings.copyWith(autoUpdate: value);
+                        await ref.read(settingsProvider.notifier)
+                            .updateSettings(newSettings);
+                      },
                     ),
                     const SizedBox(height: 32),
 
@@ -326,14 +261,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               labelText: 'Backup Location',
                             ),
                             readOnly: true,
-                            controller: TextEditingController(text: _backupLocation),
+                            controller: TextEditingController(
+                              text: settings.backupSettings.backupPath,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
-                          onPressed: _selectBackupLocation,
+                          onPressed: () => _selectDirectory(
+                            context,
+                            ref,
+                            settings,
+                            'Select Backup Location',
+                                (path) async {
+                              final newBackupSettings = settings.backupSettings
+                                  .copyWith(backupPath: path);
+                              final newSettings = settings.copyWith(
+                                backupSettings: newBackupSettings,
+                              );
+                              await ref.read(settingsProvider.notifier)
+                                  .updateSettings(newSettings);
+                            },
+                          ),
                           icon: const Icon(Icons.folder_open),
-                          tooltip: 'Select Backup Location',
+                          tooltip: 'Select Backup Path',
                         ),
                       ],
                     ),
@@ -341,25 +292,64 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     SwitchListTile(
                       title: const Text('Automatic Backups'),
                       subtitle: const Text('Enable automatic server backups'),
-                      value: _autoBackup,
-                      onChanged: (value) => setState(() => _autoBackup = value),
+                      value: settings.backupSettings.autoBackup,
+                      onChanged: (value) async {
+                        final newBackupSettings = settings.backupSettings
+                            .copyWith(autoBackup: value);
+                        final newSettings = settings.copyWith(
+                          backupSettings: newBackupSettings,
+                        );
+                        await ref.read(settingsProvider.notifier)
+                            .updateSettings(newSettings);
+                      },
                     ),
-                    if (_autoBackup) ...[
-                      const SizedBox(height: 8),
+                    if (settings.backupSettings.autoBackup) ...[
                       Row(
                         children: [
                           Expanded(
                             child: TextFormField(
                               decoration: const InputDecoration(
-                                labelText: 'Backup Frequency (hours)',
+                                labelText: 'Backup Frequency',
                                 suffixText: 'hours',
                               ),
                               keyboardType: TextInputType.number,
-                              initialValue: _backupFrequency.toString(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _backupFrequency = int.tryParse(value) ?? 24;
-                                });
+                              initialValue:
+                              settings.backupSettings.frequency.toString(),
+                              onChanged: (value) async {
+                                final frequency = int.tryParse(value);
+                                if (frequency != null) {
+                                  final newBackupSettings = settings.backupSettings
+                                      .copyWith(frequency: frequency);
+                                  final newSettings = settings.copyWith(
+                                    backupSettings: newBackupSettings,
+                                  );
+                                  await ref.read(settingsProvider.notifier)
+                                      .updateSettings(newSettings);
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextFormField(
+                              decoration: const InputDecoration(
+                                labelText: 'Maximum Backups',
+                                suffixText: 'backups',
+                              ),
+                              keyboardType: TextInputType.number,
+                              initialValue:
+                              settings.backupSettings.maxBackups.toString(),
+                              onChanged: (value) async {
+                                final maxBackups = int.tryParse(value);
+                                if (maxBackups != null) {
+                                  final newBackupSettings = settings.backupSettings
+                                      .copyWith(maxBackups: maxBackups);
+                                  final newSettings = settings.copyWith(
+                                    backupSettings: newBackupSettings,
+                                  );
+                                  await ref.read(settingsProvider.notifier)
+                                      .updateSettings(newSettings);
+                                }
                               },
                             ),
                           ),
@@ -372,9 +362,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
+        loading: () => const Center(
+          child: CircularProgressIndicator(),
+        ),
+        error: (error, stack) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Error loading settings: $error',
+                style: const TextStyle(color: Colors.red),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  ref.invalidate(settingsProvider);
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
       ),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) => Center(child: Text('Error: $error')),
     );
   }
 }

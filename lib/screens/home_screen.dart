@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:mcsm/screens/settings_screen.dart';
 import 'package:mcsm/widgets/sidebar.dart';
 import 'package:mcsm/screens/server_screen.dart';
-import 'package:mcsm/screens/settings_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

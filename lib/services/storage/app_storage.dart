@@ -1,17 +1,19 @@
 import 'dart:io';
-import 'dart:convert';
 import 'storage_config.dart';
 import '../../models/config_model.dart';
-import '../../models/backup_config.dart';
 import '../../models/minecraft_server.dart';
+import './atomic_storage.dart';
 
 class AppStorage {
+  late final AtomicStorage _storage;
+
   Future<void> init() async {
     try {
       await StorageConfig.ensureDirectoriesExist();
+      _storage = AtomicStorage(StorageConfig.dataPath);
+      await _storage.init();
 
       await _createInitialFiles();
-
       print('Storage initialized successfully');
     } catch (e) {
       print('Error initializing storage: $e');
@@ -20,47 +22,37 @@ class AppStorage {
   }
 
   Future<void> _createInitialFiles() async {
-    // Config file
-    final configFile = File(StorageConfig.configPath);
-    if (!await configFile.exists()) {
-      final defaultConfig = ConfigModel(
-        serverInstallPath: StorageConfig.defaultServerPath,
-        javaPath: '',
-        backupConfig: BackupConfig.defaults(),
-      );
-      await configFile.writeAsString(
-        jsonEncode(defaultConfig.toJson()),
-        flush: true,
-      );
-      print('Created config file at: ${configFile.path}');
-    }
+    try {
+      // Config file
+      if (!File(StorageConfig.configPath).existsSync()) {
+        final defaultConfig = ConfigModel.defaults();
+        await _storage.atomicWrite(
+          StorageConfig.configPath,
+          defaultConfig.toJson(),
+        );
+        print('Created config file at: ${StorageConfig.configPath}');
+      }
 
-    // Servers file
-    final serversFile = File(StorageConfig.serversPath);
-    if (!await serversFile.exists()) {
-      await serversFile.writeAsString(
-        jsonEncode({'servers': []}),
-        flush: true,
-      );
-      print('Created servers file at: ${serversFile.path}');
+      // Servers file
+      if (!File(StorageConfig.serversPath).existsSync()) {
+        await _storage.atomicWrite(
+          StorageConfig.serversPath,
+          {'servers': [], 'schemaVersion': '1.0.0'},
+        );
+        print('Created servers file at: ${StorageConfig.serversPath}');
+      }
+    } catch (e) {
+      throw StorageException('Failed to create initial files', e);
     }
   }
 
   Future<ConfigModel> loadConfig() async {
     try {
-      final file = File(StorageConfig.configPath);
-      if (!await file.exists()) {
-        print('Config file not found, creating default');
-        final defaultConfig = ConfigModel.defaults();
-        await saveConfig(defaultConfig);
-        return defaultConfig;
-      }
-
-      final content = await file.readAsString();
-      final json = jsonDecode(content);
+      final json = await _storage.atomicRead(StorageConfig.configPath);
       return ConfigModel.fromJson(json);
     } catch (e) {
       print('Error loading config: $e');
+      // In caso di errore, ritorna la configurazione di default
       final defaultConfig = ConfigModel.defaults();
       await saveConfig(defaultConfig);
       return defaultConfig;
@@ -68,22 +60,20 @@ class AppStorage {
   }
 
   Future<void> saveConfig(ConfigModel config) async {
-    final file = File(StorageConfig.configPath);
-    await file.writeAsString(jsonEncode(config.toJson()), flush: true);
-    print('Saved config to: ${file.path}');
+    try {
+      await _storage.atomicWrite(
+        StorageConfig.configPath,
+        config.toJson(),
+      );
+      print('Saved config to: ${StorageConfig.configPath}');
+    } catch (e) {
+      throw StorageException('Failed to save config', e);
+    }
   }
 
   Future<List<MinecraftServer>> loadServers() async {
     try {
-      final file = File(StorageConfig.serversPath);
-      if (!await file.exists()) {
-        print('Servers file not found, creating empty list');
-        await saveServers([]);
-        return [];
-      }
-
-      final content = await file.readAsString();
-      final json = jsonDecode(content);
+      final json = await _storage.atomicRead(StorageConfig.serversPath);
       final List<dynamic> serverList = json['servers'] ?? [];
       return serverList.map((s) => MinecraftServer.fromJson(s)).toList();
     } catch (e) {
@@ -93,11 +83,17 @@ class AppStorage {
   }
 
   Future<void> saveServers(List<MinecraftServer> servers) async {
-    final file = File(StorageConfig.serversPath);
-    await file.writeAsString(
-      jsonEncode({'servers': servers.map((s) => s.toJson()).toList()}),
-      flush: true,
-    );
-    print('Saved servers to: ${file.path}');
+    try {
+      await _storage.atomicWrite(
+        StorageConfig.serversPath,
+        {
+          'servers': servers.map((s) => s.toJson()).toList(),
+          'schemaVersion': '1.0.0'
+        },
+      );
+      print('Saved servers to: ${StorageConfig.serversPath}');
+    } catch (e) {
+      throw StorageException('Failed to save servers', e);
+    }
   }
 }
