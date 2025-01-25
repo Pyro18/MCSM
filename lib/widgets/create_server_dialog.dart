@@ -2,9 +2,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../services/minecraft_service.dart';
+import '../main.dart' show navigatorKey;
+import '../models/server_types.dart';
+import '../services/providers/downloads_provider.dart';
 import '../services/providers/minecraft_provider.dart';
+import '../services/providers/servers_provider.dart';
 import '../services/providers/settings_provider.dart';
+import 'confetti_overlay.dart';
 
 class CreateServerDialog extends ConsumerStatefulWidget {
   const CreateServerDialog({super.key});
@@ -23,17 +27,16 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   bool _autoStart = false;
   bool _isLoading = false;
   ServerType _serverType = ServerType.paper;
+  late String downloadId;
 
   @override
   void initState() {
     super.initState();
-    // Non settiamo più il path di default qui, verrà gestito nel didChangeDependencies
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Legge il path dai settings quando il widget viene costruito o quando i settings cambiano
     final settingsAsync = ref.read(settingsProvider);
     settingsAsync.whenData((settings) {
       setState(() {
@@ -55,30 +58,55 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   }
 
   Future<void> _createServer() async {
-    if (_formKey.currentState!.validate() && _version != null) {
-      setState(() => _isLoading = true);
+    if (!_formKey.currentState!.validate() || _version == null) return;
 
-      try {
-        final service = ref.read(minecraftServiceProvider);
-        await service.downloadServer(_version!, _serverType, _path, _name);
+    setState(() => _isLoading = true);
+    downloadId = '${_name}_${DateTime.now().millisecondsSinceEpoch}';
 
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error creating server: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
+    final downloadsNotifier = ref.read(downloadsProvider.notifier);
+    downloadsNotifier.addDownload(downloadId, _name, _version!);
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
+
+    try {
+      final service = ref.read(minecraftServiceProvider);
+      final settingsData = await ref.read(settingsProvider.future);
+
+      void onProgress(double progress) {
+        downloadsNotifier.updateProgress(
+          downloadId,
+          progress,
+          'Downloading... ${(progress * 100).toInt()}%',
+        );
       }
+
+      final serverPath = await service.downloadServer(
+        _version!,
+        _serverType,
+        _path,
+        _name,
+        onProgress,
+      );
+
+      downloadsNotifier.completeDownload(downloadId);
+
+      ref.read(serversProvider.notifier).addServer(
+            _name,
+            _version!,
+            _serverType,
+            serverPath,
+            _port,
+            _memory,
+            _autoStart,
+            settingsData.javaPath,
+          );
+
+      if (navigatorKey.currentContext != null) {
+        showConfetti(navigatorKey.currentContext!);
+      }
+    } catch (e) {
+      downloadsNotifier.setError(downloadId, e.toString());
     }
   }
 

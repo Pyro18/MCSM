@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:synchronized/synchronized.dart';
 
 class AtomicStorage {
@@ -35,10 +36,8 @@ class AtomicStorage {
     await transaction(() async {
       try {
         // writes the data to a temp file
-        await tempFile.writeAsString(
-            JsonEncoder.withIndent('  ').convert(data),
-            flush: true
-        );
+        await tempFile.writeAsString(JsonEncoder.withIndent('  ').convert(data),
+            flush: true);
 
         // if the original file exists, make a backup
         if (await file.exists()) {
@@ -112,5 +111,6 @@ class StorageException implements Exception {
   StorageException(this.message, [this.originalError]);
 
   @override
-  String toString() => 'StorageException: $message${originalError != null ? ' ($originalError)' : ''}';
+  String toString() =>
+      'StorageException: $message${originalError != null ? ' ($originalError)' : ''}';
 }

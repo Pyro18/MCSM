@@ -1,46 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/providers/downloads_provider.dart';
 
-class DownloadItem {
-  final String name;
-  final String version;
-  final double progress;
-  final String status;
-
-  DownloadItem({
-    required this.name,
-    required this.version,
-    required this.progress,
-    required this.status,
-  });
-}
-
-class DownloadsScreen extends StatelessWidget {
+class DownloadsScreen extends ConsumerWidget {
   const DownloadsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Example downloads
-    final List<DownloadItem> downloads = [
-      DownloadItem(
-        name: 'paper.jar',
-        version: '1.20.1',
-        progress: 0.7,
-        status: 'Downloading...',
-      ),
-      DownloadItem(
-        name: 'server-files.zip',
-        version: '1.19.4',
-        progress: 1.0,
-        status: 'Completed',
-      ),
-    ];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final downloads = ref.watch(downloadsProvider);
 
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           const Text(
             'Downloads',
             style: TextStyle(
@@ -50,14 +23,18 @@ class DownloadsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // Downloads List
           Expanded(
-            child: ListView.builder(
+            child: downloads.isEmpty
+                ? const Center(
+              child: Text('No active downloads'),
+            )
+                : ListView.builder(
               itemCount: downloads.length,
               itemBuilder: (context, index) {
-                final download = downloads[index];
+                final download = downloads.values.elementAt(index);
+
                 return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
+                  margin: const EdgeInsets.only(bottom: 16),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -77,7 +54,6 @@ class DownloadsScreen extends StatelessWidget {
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
                                   Text(
                                     'Version: ${download.version}',
                                     style: TextStyle(
@@ -87,17 +63,35 @@ class DownloadsScreen extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            Text(download.status),
+                            if (download.isCompleted)
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  ref.read(downloadsProvider.notifier)
+                                      .removeDownload(download.id);
+                                },
+                              ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 16),
                         LinearProgressIndicator(
                           value: download.progress,
                           backgroundColor: Theme.of(context).colorScheme.surface,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            download.progress == 1.0
+                            download.error != null
+                                ? Colors.red
+                                : download.isCompleted
                                 ? Colors.green
                                 : Theme.of(context).primaryColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          download.status,
+                          style: TextStyle(
+                            color: download.error != null
+                                ? Colors.red
+                                : Theme.of(context).colorScheme.secondary,
                           ),
                         ),
                       ],

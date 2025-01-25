@@ -1,6 +1,7 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
+
 import '../models/java_installation.dart';
 import '../services/providers/java_provider.dart';
 
@@ -10,7 +11,7 @@ class JavaSettingsWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final installationsAsync = ref.watch(javaInstallationsProvider);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -34,7 +35,6 @@ class JavaSettingsWidget extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 16),
-        
         installationsAsync.when(
           data: (installations) => installations.isEmpty
               ? const Center(
@@ -43,8 +43,8 @@ class JavaSettingsWidget extends ConsumerWidget {
               : Column(
                   children: [
                     ...installations.map((inst) => _JavaInstallationTile(
-                      installation: inst,
-                    )),
+                          installation: inst,
+                        )),
                   ],
                 ),
           loading: () => const Center(
@@ -54,7 +54,6 @@ class JavaSettingsWidget extends ConsumerWidget {
             child: Text('Error: $error'),
           ),
         ),
-        
         const SizedBox(height: 16),
         OutlinedButton.icon(
           icon: const Icon(Icons.add),
@@ -64,7 +63,7 @@ class JavaSettingsWidget extends ConsumerWidget {
       ],
     );
   }
-  
+
   Future<void> _addJavaInstallation(BuildContext context, WidgetRef ref) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -76,18 +75,17 @@ class JavaSettingsWidget extends ConsumerWidget {
       final service = ref.read(javaServiceProvider);
       final installations = await service.detectJavaInstallations();
       final path = result.files.single.path!;
-      
-      // Validate the selected Java path
+
       if (!installations.any((inst) => inst.path == path)) {
-        // If it's a new installation, add it
         final newInstallations = [
           ...installations,
           JavaInstallation(
             path: path,
-            version: 'Custom Installation', // This will be updated by the service
+            version:
+                'Custom Installation', // This will be updated by the service
           ),
         ];
-        
+
         await service.saveJavaInstallations(newInstallations);
         ref.invalidate(javaInstallationsProvider);
       }
@@ -125,7 +123,7 @@ class _JavaInstallationTile extends ConsumerWidget {
                 onPressed: () async {
                   final service = ref.read(javaServiceProvider);
                   final installations = await service.loadJavaInstallations();
-                  
+
                   final updatedInstallations = installations.map((inst) {
                     if (inst.path == installation.path) {
                       return JavaInstallation(
@@ -140,7 +138,7 @@ class _JavaInstallationTile extends ConsumerWidget {
                       isDefault: false,
                     );
                   }).toList();
-                  
+
                   await service.saveJavaInstallations(updatedInstallations);
                   ref.invalidate(javaInstallationsProvider);
                 },
@@ -150,11 +148,11 @@ class _JavaInstallationTile extends ConsumerWidget {
               onPressed: () async {
                 final service = ref.read(javaServiceProvider);
                 final installations = await service.loadJavaInstallations();
-                
+
                 final updatedInstallations = installations
                     .where((inst) => inst.path != installation.path)
                     .toList();
-                
+
                 await service.saveJavaInstallations(updatedInstallations);
                 ref.invalidate(javaInstallationsProvider);
               },

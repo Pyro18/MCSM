@@ -1,7 +1,9 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../services/java_service.dart';
 
 class JavaSettingsSection extends ConsumerStatefulWidget {
@@ -23,11 +25,11 @@ class _JavaSettingsState extends ConsumerState<JavaSettingsSection> {
 
   Future<void> _detectJavaPath() async {
     setState(() => _isSearching = true);
-    
+
     try {
       final javaService = JavaService();
       final installations = await javaService.detectJavaInstallations();
-      
+
       if (installations.isNotEmpty) {
         setState(() {
           _javaPath = installations.first.path;
@@ -71,13 +73,13 @@ class _JavaSettingsState extends ConsumerState<JavaSettingsSection> {
               child: TextFormField(
                 decoration: InputDecoration(
                   labelText: 'Java Path',
-                  suffixIcon: _isSearching 
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : null,
+                  suffixIcon: _isSearching
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
                 ),
                 readOnly: true,
                 controller: TextEditingController(text: _javaPath),
@@ -118,11 +120,10 @@ class _ServerLocationState extends ConsumerState<ServerLocationSection> {
   }
 
   void _setDefaultPath() {
-    // Imposta il percorso predefinito basato sul sistema operativo
     final defaultPath = Platform.isWindows
         ? '${Platform.environment['USERPROFILE']}\\AppData\\Roaming\\MCSM\\servers'
         : '${Platform.environment['HOME']}/.mcsm/servers';
-    
+
     setState(() {
       _serverPath = defaultPath;
     });
@@ -132,7 +133,7 @@ class _ServerLocationState extends ConsumerState<ServerLocationSection> {
     String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
       dialogTitle: 'Select Default Server Location',
     );
-    
+
     if (selectedDirectory != null) {
       setState(() {
         _serverPath = selectedDirectory;

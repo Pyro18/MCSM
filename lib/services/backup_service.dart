@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:archive/archive.dart';
 import 'package:mcsm/services/storage/storage_config.dart';
 import 'package:path/path.dart' as path;
-import 'package:archive/archive.dart';
+
 import '../models/minecraft_server.dart';
 import '../models/settings_model.dart';
 
@@ -36,8 +38,7 @@ class BackupService {
     final serverConfig = server.toJson();
     final configBytes = utf8.encode(json.encode(serverConfig));
     archive.addFile(
-        ArchiveFile('server_config.json', configBytes.length, configBytes)
-    );
+        ArchiveFile('server_config.json', configBytes.length, configBytes));
 
     final encoder = ZipEncoder();
     await backupFile.writeAsBytes(encoder.encode(archive)!);
@@ -85,7 +86,8 @@ class BackupService {
     return backupFile.path;
   }
 
-  Future<void> restoreServerBackup(String backupPath, MinecraftServer server) async {
+  Future<void> restoreServerBackup(
+      String backupPath, MinecraftServer server) async {
     final backupFile = File(backupPath);
     if (!await backupFile.exists()) {
       throw Exception('Backup file not found');
@@ -129,29 +131,27 @@ class BackupService {
   }
 
   Future<void> _addDirectoryToArchive(
-      Directory directory,
-      Archive archive, {
-        required String baseDir,
-        bool Function(File)? filter,
-      }) async {
+    Directory directory,
+    Archive archive, {
+    required String baseDir,
+    bool Function(File)? filter,
+  }) async {
     await for (final entity in directory.list(recursive: true)) {
       if (entity is File) {
         if (filter != null && !filter(entity)) continue;
 
         final relativePath = path.relative(entity.path, from: baseDir);
         final data = await entity.readAsBytes();
-        archive.addFile(
-            ArchiveFile(relativePath, data.length, data)
-        );
+        archive.addFile(ArchiveFile(relativePath, data.length, data));
       }
     }
   }
 
   Future<void> _rotateBackups(
-      String directory,
-      String prefix,
-      int maxBackups,
-      ) async {
+    String directory,
+    String prefix,
+    int maxBackups,
+  ) async {
     final dir = Directory(directory);
     if (!await dir.exists()) return;
 
@@ -161,8 +161,8 @@ class BackupService {
         .toList();
 
     if (backups.length > maxBackups) {
-      backups.sort((a, b) =>
-          a.statSync().modified.compareTo(b.statSync().modified));
+      backups.sort(
+          (a, b) => a.statSync().modified.compareTo(b.statSync().modified));
 
       for (var i = 0; i < backups.length - maxBackups; i++) {
         await backups[i].delete();

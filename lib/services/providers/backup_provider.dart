@@ -1,7 +1,9 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
-import 'package:mcsm/services/providers/settings_provider.dart';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mcsm/services/providers/servers_provider.dart';
+import 'package:mcsm/services/providers/settings_provider.dart';
+
 import '../../models/settings_model.dart';
 import '../backup_service.dart';
 
@@ -17,15 +19,14 @@ final autoBackupProvider = Provider((ref) {
   Timer? backupTimer;
   final settings = ref.watch(settingsProvider).value;
   final backupService = ref.watch(backupServiceProvider);
-  final serversAsync = ref.watch(serversProvider);
+  final servers = ref.watch(serversProvider);
 
   backupTimer?.cancel();
 
   if (settings?.backupSettings.autoBackup ?? false) {
     backupTimer = Timer.periodic(
       Duration(hours: settings?.backupSettings.frequency ?? 24),
-          (_) async {
-        final servers = await serversAsync.value ?? [];
+      (_) async {
         for (final server in servers) {
           try {
             await backupService.createServerBackup(server);
@@ -44,6 +45,5 @@ final autoBackupProvider = Provider((ref) {
       },
     );
   }
-
   return backupTimer;
 });

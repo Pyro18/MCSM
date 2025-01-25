@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:path/path.dart' as path;
 
 class StorageConfig {
@@ -14,17 +15,25 @@ class StorageConfig {
       : path.join(Platform.environment['HOME']!, '.${appFolder.toLowerCase()}');
 
   static String get dataPath => path.join(rootPath, dataFolder);
+
   static String get configPath => path.join(dataPath, configFile);
+
   static String get serversPath => path.join(dataPath, serversFile);
+
   static String get backupsPath => path.join(rootPath, backupFolder);
-  static String get defaultServerPath => path.join(rootPath, serversFolder);
+
+  static String get serversDirectoryPath => path.join(rootPath, serversFolder);
+
+  static String get defaultServerPath => serversDirectoryPath;
+
+  static String get defaultBackupPath => backupsPath;
 
   static Future<void> ensureDirectoriesExist() async {
     final directories = [
       rootPath,
       dataPath,
       backupsPath,
-      defaultServerPath,
+      serversDirectoryPath,
     ];
 
     for (final dir in directories) {
@@ -34,5 +43,15 @@ class StorageConfig {
         print('Created directory: $dir');
       }
     }
+  }
+
+  static String getServerPath(String serverName) {
+    return path.join(serversDirectoryPath, serverName);
+  }
+
+  static String getBackupPath(String serverName, DateTime timestamp) {
+    final backupName =
+        '${serverName}_${timestamp.toIso8601String().replaceAll(':', '-')}.zip';
+    return path.join(backupsPath, backupName);
   }
 }

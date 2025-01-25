@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum ServerStatus {
-  running,
-  stopped,
-  error
-}
+enum ServerStatus { running, stopped, error }
 
 class ServerCard extends StatelessWidget {
   final String name;
@@ -48,7 +44,6 @@ class ServerCard extends StatelessWidget {
       child: InkWell(
         onTap: () {
           if (status == ServerStatus.running) {
-            // Open console in a dialog when server is running
             showDialog(
               context: context,
               builder: (context) => Dialog(
@@ -88,7 +83,6 @@ class ServerCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with name and actions
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -106,12 +100,14 @@ class ServerCard extends StatelessWidget {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.play_arrow),
-                        onPressed: status == ServerStatus.stopped ? () {} : null,
+                        onPressed:
+                            status == ServerStatus.stopped ? () {} : null,
                         tooltip: 'Start Server',
                       ),
                       IconButton(
                         icon: const Icon(Icons.stop),
-                        onPressed: status == ServerStatus.running ? () {} : null,
+                        onPressed:
+                            status == ServerStatus.running ? () {} : null,
                         tooltip: 'Stop Server',
                       ),
                       IconButton(
@@ -188,7 +184,7 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-// Console view widget to be implemented
+// TODO: Console view widget to be implemented
 class ConsoleView extends StatelessWidget {
   const ConsoleView({super.key});
 

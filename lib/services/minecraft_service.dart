@@ -1,13 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
-import 'dart:convert';
-import 'package:archive/archive.dart';
 
-enum ServerType {
-  vanilla,
-  paper
-}
+import '../models/server_types.dart';
 
 class MinecraftVersion {
   final String id;
@@ -33,9 +30,10 @@ class MinecraftVersion {
 }
 
 class MinecraftService {
-  static const String vanillaVersionManifestUrl = 'https://launchermeta.mojang.com/mc/game/version_manifest.json';
+  static const String vanillaVersionManifestUrl =
+      'https://launchermeta.mojang.com/mc/game/version_manifest.json';
   static const String paperApiUrl = 'https://api.papermc.io/v2/projects/paper';
-  
+
   Future<List<MinecraftVersion>> getAvailableVersions(ServerType type) async {
     switch (type) {
       case ServerType.vanilla:
@@ -65,7 +63,7 @@ class MinecraftService {
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       final versions = data['versions'] as List;
-      
+
       return versions
           .where((v) => v['type'] == 'release' && _isVersionSupported(v['id']))
           .map((v) => MinecraftVersion.fromJson(v))
@@ -82,9 +80,9 @@ class MinecraftService {
           .map((v) => v.toString())
           .where((v) => _isVersionSupported(v))
           .toList();
-          
+
       versions = _sortVersionsDescending(versions);
-      
+
       return versions
           .map((v) => MinecraftVersion(
                 id: v,
@@ -107,7 +105,13 @@ class MinecraftService {
     }
   }
 
-  Future<String> downloadServer(String version, ServerType type, String basePath, String serverName) async {
+  Future<String> downloadServer(
+    String version,
+    ServerType type,
+    String basePath,
+    String serverName,
+    void Function(double progress)? onProgress,
+  ) async {
     final serverDir = Directory(path.join(basePath, serverName));
     if (!await serverDir.exists()) {
       await serverDir.create();
@@ -125,21 +129,38 @@ class MinecraftService {
         break;
     }
 
-    final response = await http.get(Uri.parse(downloadUrl));
-    if (response.statusCode == 200) {
-      await File(serverJarPath).writeAsBytes(response.bodyBytes);
-      return serverDir.path;
-    }
-    throw Exception('Failed to download server jar');
+    final client = http.Client();
+    final request =
+        await client.send(http.Request('GET', Uri.parse(downloadUrl)));
+    final totalBytes = request.contentLength ?? 0;
+    var receivedBytes = 0;
+
+    final file = File(serverJarPath);
+    final sink = file.openWrite();
+
+    await request.stream.listen(
+      (chunk) {
+        receivedBytes += chunk.length;
+        sink.add(chunk);
+        if (totalBytes > 0 && onProgress != null) {
+          onProgress(receivedBytes / totalBytes);
+        }
+      },
+      onDone: () async {
+        await sink.close();
+      },
+    ).asFuture();
+
+    return serverDir.path;
   }
 
   Future<String> _getVanillaDownloadUrl(String version) async {
     final response = await http.get(Uri.parse(vanillaVersionManifestUrl));
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
-      final versionInfo = (data['versions'] as List)
-          .firstWhere((v) => v['id'] == version);
-      
+      final versionInfo =
+          (data['versions'] as List).firstWhere((v) => v['id'] == version);
+
       final versionResponse = await http.get(Uri.parse(versionInfo['url']));
       if (versionResponse.statusCode == 200) {
         final versionData = json.decode(versionResponse.body);
@@ -150,38 +171,35 @@ class MinecraftService {
   }
 
   Future<String> _getPaperDownloadUrl(String version) async {
-    final buildsResponse = await http.get(
-      Uri.parse('https://api.papermc.io/v2/projects/paper/versions/$version/builds')
-    );
-    
+    final buildsResponse = await http.get(Uri.parse(
+        'https://api.papermc.io/v2/projects/paper/versions/$version/builds'));
+
     if (buildsResponse.statusCode == 200) {
       final data = json.decode(buildsResponse.body);
       final builds = data['builds'] as List;
-      
+
       if (builds.isEmpty) {
         throw Exception('No builds found for version $version');
       }
-      
+
       final latestBuild = builds.last;
       final buildNumber = latestBuild['build'] as int;
-      
+
       final fileName = 'paper-$version-$buildNumber.jar';
-      
+
       return 'https://api.papermc.io/v2/projects/paper/versions/$version/builds/$buildNumber/downloads/$fileName';
     }
-    throw
-    
-    Exception('Failed to get paper builds');
+    throw Exception('Failed to get paper builds');
   }
 
   Future<String> findJavaPath() async {
     final String javaHome = Platform.environment['JAVA_HOME'] ?? '';
-    
+
     if (javaHome.isNotEmpty) {
       final String javaPath = Platform.isWindows
           ? path.join(javaHome, 'bin', 'java.exe')
           : path.join(javaHome, 'bin', 'java');
-          
+
       if (await File(javaPath).exists()) {
         return javaPath;
       }
@@ -202,7 +220,8 @@ class MinecraftService {
         if (Platform.isWindows) {
           final List<FileSystemEntity> entries = await Directory(basePath)
               .list(recursive: true)
-              .where((entry) => entry.path.endsWith(Platform.isWindows ? 'java.exe' : 'java'))
+              .where((entry) =>
+                  entry.path.endsWith(Platform.isWindows ? 'java.exe' : 'java'))
               .toList();
 
           if (entries.isNotEmpty) {

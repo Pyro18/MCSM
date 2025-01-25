@@ -24,10 +24,10 @@
 
 ### Data Management
 - [x] Decidere e implementare il sistema di storage (SQLite vs JSON)
-- [ ] Implementare il sistema di backup delle configurazioni
-- [ ] Creare schema per i dati dei server
+- [x] Implementare il sistema di backup delle configurazioni
+- [x] Creare schema per i dati dei server
 - [ ] Aggiungere sistema di migrazione dei dati
-- [ ] Implementare sistema di validazione dei dati
+- [x] Implementare sistema di validazione dei dati
 
 ### Internationalization
 - [ ] Implementare sistema i18n

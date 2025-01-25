@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:mcsm/services/providers/settings_provider.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'screens/home_screen.dart';
-import 'theme/app_theme.dart';
-import 'services/settings_service.dart';
+import 'package:window_manager/window_manager.dart';
 
+import 'screens/home_screen.dart';
+import 'services/settings_service.dart';
+import 'theme/app_theme.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Inizializza il servizio delle impostazioni
     final settingsService = SettingsService();
     await settingsService.init();
 
-    // Debug log delle impostazioni iniziali
     final settings = await settingsService.loadSettings();
     print('Settings loaded:');
     print('Server path: ${settings.serverPath}');
@@ -40,11 +39,7 @@ void main() async {
 
     runApp(
       ProviderScope(
-        overrides: [
-          // Override del provider del servizio impostazioni
-          settingsServiceProvider.overrideWithValue(settingsService),
-        ],
-        child: const MCSMApp(),
+        child: MCSMApp(navigatorKey: navigatorKey),
       ),
     );
   } catch (e, stack) {
@@ -55,11 +50,14 @@ void main() async {
 }
 
 class MCSMApp extends StatelessWidget {
-  const MCSMApp({super.key});
+  final GlobalKey<NavigatorState> navigatorKey;
+
+  const MCSMApp({super.key, required this.navigatorKey});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'MCSM',
       theme: AppTheme.darkTheme,
       debugShowCheckedModeBanner: false,

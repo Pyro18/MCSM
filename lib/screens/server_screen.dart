@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mcsm/widgets/server_card.dart';
 import 'package:mcsm/widgets/create_server_dialog.dart';
+import '../services/providers/servers_provider.dart';
 
-class ServersScreen extends StatelessWidget {
+class ServersScreen extends ConsumerWidget {
   const ServersScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final servers = ref.watch(serversProvider);
+
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -27,7 +30,6 @@ class ServersScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // Servers Grid
           Expanded(
             child: GridView.count(
               crossAxisCount: 3,
@@ -35,15 +37,14 @@ class ServersScreen extends StatelessWidget {
               crossAxisSpacing: 16,
               childAspectRatio: 1.5,
               children: [
-                // Example server card
-                const ServerCard(
-                  name: 'Survival Server',
-                  version: '1.20.1',
-                  port: 25565,
+                ...servers.map((server) => ServerCard(
+                  key: ValueKey(server.id),
+                  name: server.name,
+                  version: server.version,
+                  port: server.port,
                   status: ServerStatus.stopped,
-                ),
-                
-                // Add Server Card
+                )),
+
                 Card(
                   child: InkWell(
                     onTap: () {

@@ -1,11 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../models/settings_model.dart';
 import '../settings_service.dart';
 
-
 final settingsServiceProvider = Provider((ref) => SettingsService());
 
-final settingsProvider = AsyncNotifierProvider<SettingsNotifier, Settings>(SettingsNotifier.new);
+final settingsProvider =
+    AsyncNotifierProvider<SettingsNotifier, Settings>(SettingsNotifier.new);
 
 class SettingsNotifier extends AsyncNotifier<Settings> {
   @override

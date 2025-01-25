@@ -1,8 +1,9 @@
 import 'dart:io';
-import 'storage_config.dart';
+
 import '../../models/config_model.dart';
 import '../../models/minecraft_server.dart';
 import './atomic_storage.dart';
+import 'storage_config.dart';
 
 class AppStorage {
   late final AtomicStorage _storage;
@@ -30,7 +31,7 @@ class AppStorage {
           StorageConfig.configPath,
           defaultConfig.toJson(),
         );
-        print('Created config file at: ${StorageConfig.configPath}');
+        print('Created default config file');
       }
 
       // Servers file
@@ -39,7 +40,7 @@ class AppStorage {
           StorageConfig.serversPath,
           {'servers': [], 'schemaVersion': '1.0.0'},
         );
-        print('Created servers file at: ${StorageConfig.serversPath}');
+        print('Created servers file');
       }
     } catch (e) {
       throw StorageException('Failed to create initial files', e);
@@ -52,7 +53,6 @@ class AppStorage {
       return ConfigModel.fromJson(json);
     } catch (e) {
       print('Error loading config: $e');
-      // In caso di errore, ritorna la configurazione di default
       final defaultConfig = ConfigModel.defaults();
       await saveConfig(defaultConfig);
       return defaultConfig;
@@ -65,7 +65,6 @@ class AppStorage {
         StorageConfig.configPath,
         config.toJson(),
       );
-      print('Saved config to: ${StorageConfig.configPath}');
     } catch (e) {
       throw StorageException('Failed to save config', e);
     }
@@ -91,7 +90,6 @@ class AppStorage {
           'schemaVersion': '1.0.0'
         },
       );
-      print('Saved servers to: ${StorageConfig.serversPath}');
     } catch (e) {
       throw StorageException('Failed to save servers', e);
     }

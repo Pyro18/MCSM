@@ -1,38 +1,70 @@
-// providers/servers_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+
 import '../../models/minecraft_server.dart';
+import '../../models/server_types.dart';
 import '../storage/app_storage.dart';
 
-final serversProvider = AsyncNotifierProvider<ServersNotifier, List<MinecraftServer>>(ServersNotifier.new);
+class ServersNotifier extends StateNotifier<List<MinecraftServer>> {
+  final AppStorage _storage = AppStorage();
 
-class ServersNotifier extends AsyncNotifier<List<MinecraftServer>> {
-  @override
-  Future<List<MinecraftServer>> build() async {
-    // Carica i server dal storage
-    final storage = AppStorage();
-    await storage.init();
-    return storage.loadServers();
+  ServersNotifier() : super([]) {
+    _loadServers();
   }
 
-  Future<void> addServer(MinecraftServer server) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      final currentServers = await future;
-      final updatedServers = [...currentServers, server];
-      final storage = AppStorage();
-      await storage.saveServers(updatedServers);
-      return updatedServers;
-    });
+  Future<void> _loadServers() async {
+    try {
+      await _storage.init();
+      final servers = await _storage.loadServers();
+      state = servers;
+    } catch (e) {
+      print('Error loading servers: $e');
+    }
   }
 
-  Future<void> removeServer(String serverId) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      final currentServers = await future;
-      final updatedServers = currentServers.where((s) => s.id != serverId).toList();
-      final storage = AppStorage();
-      await storage.saveServers(updatedServers);
-      return updatedServers;
-    });
+  void addServer(
+    String name,
+    String version,
+    ServerType type,
+    String path,
+    int port,
+    int memory,
+    bool autoStart,
+    String javaPath,
+  ) {
+    final server = MinecraftServer(
+      id: const Uuid().v4(),
+      name: name,
+      version: version,
+      type: type,
+      path: path,
+      port: port,
+      memory: memory,
+      autoStart: autoStart,
+      status: ServerStatus.stopped,
+      javaPath: javaPath,
+      properties: {},
+    );
+
+    state = [...state, server];
+    _saveServers();
+  }
+
+  void removeServer(String serverId) {
+    state = state.where((s) => s.id != serverId).toList();
+    _saveServers();
+  }
+
+  Future<void> _saveServers() async {
+    try {
+      await _storage.saveServers(state);
+    } catch (e) {
+      print('Error saving servers: $e');
+    }
   }
 }
+
+final serversProvider =
+    StateNotifierProvider<ServersNotifier, List<MinecraftServer>>((ref) {
+  return ServersNotifier();
+});

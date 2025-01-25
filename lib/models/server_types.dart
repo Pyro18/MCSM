@@ -1,10 +1,9 @@
 enum ServerType {
   vanilla,
-  paper,
-  forge,
-  fabric,
-  spigot,
-  bukkit;
+  paper;
+  //forge,
+  //fabric,
+  //spigot;
 
   String get displayName {
     switch (this) {
@@ -12,14 +11,12 @@ enum ServerType {
         return 'Vanilla';
       case ServerType.paper:
         return 'Paper';
-      case ServerType.forge:
-        return 'Forge';
-      case ServerType.fabric:
-        return 'Fabric';
-      case ServerType.spigot:
-        return 'Spigot';
-      case ServerType.bukkit:
-        return 'Bukkit';
+      //case ServerType.forge:
+      //  return 'Forge';
+      //case ServerType.fabric:
+      //  return 'Fabric';
+      //case ServerType.spigot:
+      //  return 'Spigot';
     }
   }
 }

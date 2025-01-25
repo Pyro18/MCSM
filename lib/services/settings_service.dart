@@ -1,20 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:path/path.dart' as path;
+
 import '../models/settings_model.dart';
+import 'storage/storage_config.dart';
 
 class SettingsService {
-  final String configPath;
-
-  SettingsService(): configPath = Platform.isWindows
-      ? path.join(Platform.environment['APPDATA']!, 'MCSM', 'config.json')
-      : path.join(Platform.environment['HOME']!, '.mcsm', 'config.json');
+  String get configPath => StorageConfig.configPath;
 
   Future<void> init() async {
-    final dir = Directory(path.dirname(configPath));
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
+    await StorageConfig.ensureDirectoriesExist();
 
     final file = File(configPath);
     if (!await file.exists()) {
@@ -41,8 +35,7 @@ class SettingsService {
     try {
       final file = File(configPath);
       await file.writeAsString(
-          JsonEncoder.withIndent('  ').convert(settings.toJson())
-      );
+          JsonEncoder.withIndent('  ').convert(settings.toJson()));
     } catch (e, stack) {
       print('Error saving settings: $e\n$stack');
       rethrow;
