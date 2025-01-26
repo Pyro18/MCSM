@@ -11,9 +11,9 @@
 ### Server Creation & Management
 - [ ] Implementare una progress bar durante il download del server
 - [ ] Aggiungere una schermata di download separata
-- [ ] Implementare il sistema di aggiunta automatica dei server alla homepage
-- [ ] Aggiungere la validazione dei campi nel form di creazione
-- [ ] Implementare il sistema di gestione delle versioni dei server
+- [x] Implementare il sistema di aggiunta automatica dei server alla homepage
+- [x] Aggiungere la validazione dei campi nel form di creazione
+- [x] Implementare il sistema di gestione delle versioni dei server
 
 ### UI/UX Improvements
 - [x] Aggiungere spazi corretti nel layout delle impostazioni

@@ -66,9 +66,6 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
     final downloadsNotifier = ref.read(downloadsProvider.notifier);
     downloadsNotifier.addDownload(downloadId, _name, _version!);
 
-    if (!mounted) return;
-    Navigator.of(context).pop();
-
     try {
       final service = ref.read(minecraftServiceProvider);
       final settingsData = await ref.read(settingsProvider.future);
@@ -89,9 +86,11 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
         onProgress,
       );
 
+      print('Server downloaded to: $serverPath');
       downloadsNotifier.completeDownload(downloadId);
 
-      ref.read(serversProvider.notifier).addServer(
+      print('Adding server to provider...');
+      await ref.read(serversProvider.notifier).addServer(
             _name,
             _version!,
             _serverType,
@@ -101,12 +100,30 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
             _autoStart,
             settingsData.javaPath,
           );
+      print('Server added to provider successfully');
 
-      if (navigatorKey.currentContext != null) {
-        showConfetti(navigatorKey.currentContext!);
+      if (mounted) {
+        Navigator.of(context).pop();
+        if (navigatorKey.currentContext != null) {
+          showConfetti(navigatorKey.currentContext!);
+        }
       }
-    } catch (e) {
+    } catch (e, stack) {
+      print('Error creating server: $e');
+      print('Stack trace: $stack');
       downloadsNotifier.setError(downloadId, e.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating server: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

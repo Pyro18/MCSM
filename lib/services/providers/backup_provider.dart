@@ -19,29 +19,32 @@ final autoBackupProvider = Provider((ref) {
   Timer? backupTimer;
   final settings = ref.watch(settingsProvider).value;
   final backupService = ref.watch(backupServiceProvider);
-  final servers = ref.watch(serversProvider);
+  final serversAsync = ref.watch(serversProvider);
 
   backupTimer?.cancel();
 
   if (settings?.backupSettings.autoBackup ?? false) {
     backupTimer = Timer.periodic(
       Duration(hours: settings?.backupSettings.frequency ?? 24),
-      (_) async {
-        for (final server in servers) {
-          try {
-            await backupService.createServerBackup(server);
-          } catch (e) {
-            print('Error backing up server ${server.name}: $e');
+          (_) async {
+        // Handle the AsyncValue state
+        serversAsync.whenData((servers) async {
+          for (final server in servers) {
+            try {
+              await backupService.createServerBackup(server);
+            } catch (e) {
+              print('Error backing up server ${server.name}: $e');
+            }
           }
-        }
 
-        if (settings?.backupSettings.backupConfigs ?? false) {
-          try {
-            await backupService.createConfigBackup();
-          } catch (e) {
-            print('Error backing up configurations: $e');
+          if (settings?.backupSettings.backupConfigs ?? false) {
+            try {
+              await backupService.createConfigBackup();
+            } catch (e) {
+              print('Error backing up configurations: $e');
+            }
           }
-        }
+        });
       },
     );
   }

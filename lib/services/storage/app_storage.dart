@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import '../../models/config_model.dart';
 import '../../models/minecraft_server.dart';
 import './atomic_storage.dart';
 import 'storage_config.dart';
@@ -24,49 +23,15 @@ class AppStorage {
 
   Future<void> _createInitialFiles() async {
     try {
-      // Config file
-      if (!File(StorageConfig.configPath).existsSync()) {
-        final defaultConfig = ConfigModel.defaults();
-        await _storage.atomicWrite(
-          StorageConfig.configPath,
-          defaultConfig.toJson(),
-        );
-        print('Created default config file');
-      }
-
-      // Servers file
-      if (!File(StorageConfig.serversPath).existsSync()) {
+      if (!await File(StorageConfig.serversPath).exists()) {
         await _storage.atomicWrite(
           StorageConfig.serversPath,
           {'servers': [], 'schemaVersion': '1.0.0'},
         );
-        print('Created servers file');
+        print('Created servers file at: ${StorageConfig.serversPath}');
       }
     } catch (e) {
       throw StorageException('Failed to create initial files', e);
-    }
-  }
-
-  Future<ConfigModel> loadConfig() async {
-    try {
-      final json = await _storage.atomicRead(StorageConfig.configPath);
-      return ConfigModel.fromJson(json);
-    } catch (e) {
-      print('Error loading config: $e');
-      final defaultConfig = ConfigModel.defaults();
-      await saveConfig(defaultConfig);
-      return defaultConfig;
-    }
-  }
-
-  Future<void> saveConfig(ConfigModel config) async {
-    try {
-      await _storage.atomicWrite(
-        StorageConfig.configPath,
-        config.toJson(),
-      );
-    } catch (e) {
-      throw StorageException('Failed to save config', e);
     }
   }
 
@@ -74,24 +39,32 @@ class AppStorage {
     try {
       final json = await _storage.atomicRead(StorageConfig.serversPath);
       final List<dynamic> serverList = json['servers'] ?? [];
-      return serverList.map((s) => MinecraftServer.fromJson(s)).toList();
+      final servers =
+          serverList.map((s) => MinecraftServer.fromJson(s)).toList();
+      print('Loaded ${servers.length} servers from storage');
+      return servers;
     } catch (e) {
       print('Error loading servers: $e');
-      return [];
+      rethrow;
     }
   }
 
   Future<void> saveServers(List<MinecraftServer> servers) async {
     try {
-      await _storage.atomicWrite(
-        StorageConfig.serversPath,
-        {
-          'servers': servers.map((s) => s.toJson()).toList(),
-          'schemaVersion': '1.0.0'
-        },
-      );
-    } catch (e) {
-      throw StorageException('Failed to save servers', e);
+      print('Attempting to save ${servers.length} servers');
+      final json = {
+        'servers': servers.map((s) => s.toJson()).toList(),
+        'schemaVersion': '1.0.0'
+      };
+      await _storage.atomicWrite(StorageConfig.serversPath, json);
+      print('Successfully saved servers to: ${StorageConfig.serversPath}');
+
+      final savedContent = await _storage.atomicRead(StorageConfig.serversPath);
+      print('Verification - Saved content: $savedContent');
+    } catch (e, stack) {
+      print('Error saving servers: $e');
+      print('Stack trace: $stack');
+      rethrow;
     }
   }
 }

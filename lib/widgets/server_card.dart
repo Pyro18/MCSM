@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-enum ServerStatus { running, stopped, error }
+import '../models/server_types.dart';
 
 class ServerCard extends StatelessWidget {
   final String name;
@@ -24,18 +23,14 @@ class ServerCard extends StatelessWidget {
         return Colors.grey;
       case ServerStatus.error:
         return Colors.red;
+      case ServerStatus.starting:
+      case ServerStatus.stopping:
+        return Colors.orange;
     }
   }
 
   String _getStatusText() {
-    switch (status) {
-      case ServerStatus.running:
-        return 'Running';
-      case ServerStatus.stopped:
-        return 'Stopped';
-      case ServerStatus.error:
-        return 'Error';
-    }
+    return status.displayName;
   }
 
   @override
@@ -101,13 +96,13 @@ class ServerCard extends StatelessWidget {
                       IconButton(
                         icon: const Icon(Icons.play_arrow),
                         onPressed:
-                            status == ServerStatus.stopped ? () {} : null,
+                        status == ServerStatus.stopped ? () {} : null,
                         tooltip: 'Start Server',
                       ),
                       IconButton(
                         icon: const Icon(Icons.stop),
                         onPressed:
-                            status == ServerStatus.running ? () {} : null,
+                        status == ServerStatus.running ? () {} : null,
                         tooltip: 'Stop Server',
                       ),
                       IconButton(
