@@ -10,13 +10,9 @@ class ServerProcessService {
   final _processOutputControllers = <String, StreamController<String>>{};
   final _serverStatusControllers = <String, StreamController<ServerStatus>>{};
 
-  // Memory usage in MB
   final _memoryUsage = <String, int>{};
-  // CPU usage percentage
   final _cpuUsage = <String, double>{};
-  // Players online
   final _playersOnline = <String, int>{};
-  // TPS (Ticks Per Second)
   final _tps = <String, double>{};
 
   Stream<String>? getServerOutput(String serverId) {
@@ -31,6 +27,23 @@ class ServerProcessService {
     return _serverStatusControllers[serverId]?.stream;
   }
 
+  Future<void> cleanupServerFiles(String serverPath) async {
+    try {
+      final sessionLock = File('${serverPath}/session.lock');
+      if (await sessionLock.exists()) {
+        await sessionLock.delete();
+      }
+
+      // Controlla anche altri file di lock se necessario
+      final worldLock = File('${serverPath}/world/session.lock');
+      if (await worldLock.exists()) {
+        await worldLock.delete();
+      }
+    } catch (e) {
+      print('Error cleaning up server files: $e');
+    }
+  }
+
   Future<void> startServer(MinecraftServer server) async {
     if (_runningProcesses.containsKey(server.id)) {
       throw Exception('Server is already running');
@@ -42,64 +55,89 @@ class ServerProcessService {
 
     final outputController = _processOutputControllers[server.id]!;
 
-    // Validation checks
-    outputController.add('Performing pre-start checks...\n');
-
-    // Check Java path
-    final javaFile = File(server.javaPath);
-    if (!await javaFile.exists()) {
-      final error = 'Java executable not found at: ${server.javaPath}';
-      print(error);
-      outputController.add('ERROR: $error\n');
-      _serverStatusControllers[server.id]?.add(ServerStatus.error);
-      throw Exception(error);
-    }
-    outputController.add('Java executable found.\n');
-
-    // Check server directory
-    final serverDir = Directory(server.path);
-    if (!await serverDir.exists()) {
-      final error = 'Server directory not found: ${server.path}';
-      print(error);
-      outputController.add('ERROR: $error\n');
-      _serverStatusControllers[server.id]?.add(ServerStatus.error);
-      throw Exception(error);
-    }
-    outputController.add('Server directory found.\n');
-
-    // Check server.jar
-    final serverJar = File('${server.path}/server.jar');
-    if (!await serverJar.exists()) {
-      final error = 'server.jar not found in: ${server.path}';
-      print(error);
-      outputController.add('ERROR: $error\n');
-      _serverStatusControllers[server.id]?.add(ServerStatus.error);
-      throw Exception(error);
-    }
-    outputController.add('server.jar found.\n');
-
-    // List directory contents for debugging
-    outputController.add('\nServer directory contents:\n');
-    await for (var entity in serverDir.list()) {
-      outputController.add('${entity.path}\n');
-    }
-
     // Update server status to starting
     _serverStatusControllers[server.id]?.add(ServerStatus.starting);
-    outputController.add('\nStarting server...\n');
-
-    // Prepare Java arguments
-    final args = [
-      '-Xmx${server.memory}M',
-      '-Xms${server.memory}M',
-      '-jar',
-      'server.jar',
-      'nogui'
-    ];
-
-    outputController.add('Command: ${server.javaPath} ${args.join(' ')}\n');
+    outputController.add('Starting server...\n');
 
     try {
+      // Clean up any existing lock files
+      await cleanupServerFiles(server.path);
+
+      // Kill any existing Java processes that might be running this server
+      if (Platform.isWindows) {
+        try {
+          final result = await Process.run('taskkill', ['/F', '/IM', 'java.exe']);
+          outputController.add('Cleaned up background processes: ${result.stdout}\n');
+        } catch (e) {
+          print('Error killing Java processes: $e');
+        }
+      } else {
+        try {
+          final result = await Process.run('pkill', ['-f', 'java']);
+          outputController.add('Cleaned up background processes: ${result.stdout}\n');
+        } catch (e) {
+          print('Error killing Java processes: $e');
+        }
+      }
+
+      // Wait for processes to fully terminate
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Validation checks
+      outputController.add('Performing pre-start checks...\n');
+
+      // Check Java path
+      final javaFile = File(server.javaPath);
+      if (!await javaFile.exists()) {
+        final error = 'Java executable not found at: ${server.javaPath}';
+        print(error);
+        outputController.add('ERROR: $error\n');
+        _serverStatusControllers[server.id]?.add(ServerStatus.error);
+        throw Exception(error);
+      }
+      outputController.add('Java executable found.\n');
+
+      // Check server directory
+      final serverDir = Directory(server.path);
+      if (!await serverDir.exists()) {
+        final error = 'Server directory not found: ${server.path}';
+        print(error);
+        outputController.add('ERROR: $error\n');
+        _serverStatusControllers[server.id]?.add(ServerStatus.error);
+        throw Exception(error);
+      }
+      outputController.add('Server directory found.\n');
+
+      // Check server.jar
+      final serverJar = File('${server.path}/server.jar');
+      if (!await serverJar.exists()) {
+        final error = 'server.jar not found in: ${server.path}';
+        print(error);
+        outputController.add('ERROR: $error\n');
+        _serverStatusControllers[server.id]?.add(ServerStatus.error);
+        throw Exception(error);
+      }
+      outputController.add('server.jar found.\n');
+
+      // List directory contents for debugging
+      outputController.add('\nServer directory contents:\n');
+      await for (var entity in serverDir.list()) {
+        outputController.add('${entity.path}\n');
+      }
+
+      // Prepare Java arguments
+      final args = [
+        '-Xmx${server.memory}M',
+        '-Xms${server.memory}M',
+        '-jar',
+        'server.jar',
+        'nogui'
+      ];
+
+      outputController.add('\nStarting server with command:\n');
+      outputController.add('${server.javaPath} ${args.join(' ')}\n\n');
+
+      // Start the process
       final process = await Process.start(
         server.javaPath,
         args,
@@ -165,20 +203,29 @@ class ServerProcessService {
 
     _serverStatusControllers[serverId]?.add(ServerStatus.stopping);
 
-    // Send stop command to server
-    process.stdin.writeln('stop');
-
-    // Wait for process to exit
     try {
-      await process.exitCode.timeout(const Duration(seconds: 30));
-    } catch (e) {
-      // If server doesn't stop gracefully, force kill it
-      process.kill();
-    }
+      process.stdin.writeln('stop');
 
-    _runningProcesses.remove(serverId);
-    _serverStatusControllers[serverId]?.add(ServerStatus.stopped);
+      await process.exitCode.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () async {
+          process.kill(ProcessSignal.sigterm);
+          await Future.delayed(const Duration(seconds: 2));
+          if (_runningProcesses.containsKey(serverId)) {
+            process.kill(ProcessSignal.sigkill);
+          }
+          return -1;
+        },
+      );
+    } catch (e) {
+      print('Error stopping server gracefully: $e');
+      process.kill();
+    } finally {
+      _runningProcesses.remove(serverId);
+      _serverStatusControllers[serverId]?.add(ServerStatus.stopped);
+    }
   }
+
 
   Future<void> sendCommand(String serverId, String command) async {
     final process = _runningProcesses[serverId];
@@ -202,12 +249,24 @@ class ServerProcessService {
       }
     }
 
-    // Parse players online
-    if (output.contains('players online:')) {
-      final playersMatch = RegExp(r'(\d+) players online:').firstMatch(output);
-      if (playersMatch != null) {
-        _playersOnline[serverId] = int.parse(playersMatch.group(1)!);
+    final playerPatterns = [
+      RegExp(r'There are (\d+) of a max of \d+ players online'),
+      RegExp(r'(\d+) player(?:s)? online:'),
+      RegExp(r'Running with (\d+) player\(s\)'),
+    ];
+
+    for (final pattern in playerPatterns) {
+      final match = pattern.firstMatch(output);
+      if (match != null) {
+        _playersOnline[serverId] = int.parse(match.group(1)!);
+        break;
       }
+    }
+
+    if (output.contains('joined the game')) {
+      _playersOnline[serverId] = (_playersOnline[serverId] ?? 0) + 1;
+    } else if (output.contains('left the game')) {
+      _playersOnline[serverId] = (_playersOnline[serverId] ?? 1) - 1;
     }
   }
 

@@ -25,23 +25,53 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> {
   final List<FlSpot> _cpuData = [];
   final List<FlSpot> _memoryData = [];
   final List<FlSpot> _networkData = [];
+  final List<String> _consoleHistory = [];
   bool _eulaDialogShown = false;
+  bool _autoScroll = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
-    _commandController.dispose();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _commandController.dispose();
     super.dispose();
   }
 
+  void _onScroll() {
+    if (_scrollController.position.pixels < _scrollController.position.maxScrollExtent) {
+      setState(() => _autoScroll = false);
+    } else {
+      setState(() => _autoScroll = true);
+    }
+  }
+
   void _scrollToBottom() {
-    if (_scrollController.hasClients) {
+    if (_autoScroll && _scrollController.hasClients) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
       );
     }
+  }
+
+  void _updateConsoleOutput(String newOutput) {
+    setState(() {
+      _consoleHistory.addAll(newOutput.split('\n').where((line) => line.isNotEmpty));
+      // Manteniamo solo le ultime 1000 righe per evitare problemi di memoria
+      if (_consoleHistory.length > 1000) {
+        _consoleHistory.removeRange(0, _consoleHistory.length - 1000);
+      }
+    });
+
+    // Scroll to bottom if auto-scroll is enabled
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   Future<void> _restartServer() async {
@@ -98,7 +128,11 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> {
     final outputAsync = ref.watch(serverOutputProvider(widget.server.id));
     final metricsAsync = ref.watch(serverMetricsProvider(widget.server.id));
 
-    outputAsync.whenData((output) => _checkAndShowEula(output));
+    outputAsync.whenData((output) {
+      if (output.isNotEmpty) {
+        _updateConsoleOutput(output);
+      }
+    });
 
     return Scaffold(
       backgroundColor: const Color(0xFF1E1E1E),
@@ -209,75 +243,68 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Console output
                         Expanded(
                           child: Container(
                             decoration: BoxDecoration(
                               color: const Color(0xFF2D2D2D),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: outputAsync.when(
-                              data: (output) {
-                                WidgetsBinding.instance.addPostFrameCallback(
-                                    (_) => _scrollToBottom());
-                                return Column(
-                                  children: [
-                                    Expanded(
-                                      child: SingleChildScrollView(
-                                        controller: _scrollController,
-                                        padding: const EdgeInsets.all(16),
-                                        child: Text(
-                                          output,
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    controller: _scrollController,
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: _consoleHistory
+                                          .map((line) => Text(
+                                                line,
+                                                style: const TextStyle(
+                                                  fontFamily: 'monospace',
+                                                  color: Colors.white,
+                                                ),
+                                              ))
+                                          .toList(),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(color: Color(0xFF3D3D3D)),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _commandController,
                                           style: const TextStyle(
-                                            fontFamily: 'monospace',
-                                            color: Colors.white,
+                                              color: Colors.white),
+                                          decoration: const InputDecoration(
+                                            hintText: 'Type a command...',
+                                            hintStyle:
+                                                TextStyle(color: Colors.grey),
+                                            border: InputBorder.none,
+                                            prefixIcon: Icon(
+                                                Icons.keyboard_arrow_right,
+                                                color: Colors.grey),
                                           ),
+                                          onSubmitted: (_) => _sendCommand(),
                                         ),
                                       ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: const BoxDecoration(
-                                        border: Border(
-                                          top: BorderSide(
-                                              color: Color(0xFF3D3D3D)),
-                                        ),
+                                      IconButton(
+                                        icon: const Icon(Icons.send,
+                                            color: Colors.blue),
+                                        onPressed: _sendCommand,
                                       ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: TextField(
-                                              controller: _commandController,
-                                              style: const TextStyle(
-                                                  color: Colors.white),
-                                              decoration: const InputDecoration(
-                                                hintText: 'Type a command...',
-                                                hintStyle: TextStyle(
-                                                    color: Colors.grey),
-                                                border: InputBorder.none,
-                                                prefixIcon: Icon(
-                                                    Icons.keyboard_arrow_right,
-                                                    color: Colors.grey),
-                                              ),
-                                              onSubmitted: (_) =>
-                                                  _sendCommand(),
-                                            ),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.send,
-                                                color: Colors.blue),
-                                            onPressed: _sendCommand,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                              loading: () => const Center(
-                                  child: CircularProgressIndicator()),
-                              error: (_, __) => const Center(
-                                  child: Text('Error loading console output')),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
