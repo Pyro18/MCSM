@@ -29,6 +29,8 @@ dependencies:
   synchronized: ^3.3.0+3
   confetti: ^0.8.0
   uuid: ^4.5.1
+  fl_chart: ^0.70.2
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

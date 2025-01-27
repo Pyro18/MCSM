@@ -40,10 +40,7 @@ class ServersScreen extends ConsumerWidget {
                 children: [
                   ...servers.map((server) => ServerCard(
                     key: ValueKey(server.id),
-                    name: server.name,
-                    version: server.version,
-                    port: server.port,
-                    status: server.status,
+                    server: server,
                   )),
 
                   Card(

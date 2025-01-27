@@ -1,22 +1,18 @@
 import 'package:flutter/material.dart';
 import '../models/server_types.dart';
+import '../models/minecraft_server.dart';
+import '../screens/server_detail_screen.dart';
 
 class ServerCard extends StatelessWidget {
-  final String name;
-  final String version;
-  final int port;
-  final ServerStatus status;
+  final MinecraftServer server;
 
   const ServerCard({
     super.key,
-    required this.name,
-    required this.version,
-    required this.port,
-    required this.status,
+    required this.server,
   });
 
   Color _getStatusColor() {
-    switch (status) {
+    switch (server.status) {
       case ServerStatus.running:
         return Colors.green;
       case ServerStatus.stopped:
@@ -30,7 +26,7 @@ class ServerCard extends StatelessWidget {
   }
 
   String _getStatusText() {
-    return status.displayName;
+    return server.status.displayName;
   }
 
   @override
@@ -38,40 +34,13 @@ class ServerCard extends StatelessWidget {
     return Card(
       child: InkWell(
         onTap: () {
-          if (status == ServerStatus.running) {
-            showDialog(
-              context: context,
-              builder: (context) => Dialog(
-                child: Container(
-                  width: MediaQuery.of(context).size.width * 0.8,
-                  height: MediaQuery.of(context).size.height * 0.8,
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '$name - Console',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      const Expanded(child: ConsoleView()),
-                    ],
-                  ),
-                ),
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ServerDetailScreen(
+                server: server,
               ),
-            );
-          }
+            ),
+          );
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -83,7 +52,7 @@ class ServerCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      name,
+                      server.name,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -96,13 +65,13 @@ class ServerCard extends StatelessWidget {
                       IconButton(
                         icon: const Icon(Icons.play_arrow),
                         onPressed:
-                        status == ServerStatus.stopped ? () {} : null,
+                        server.status == ServerStatus.stopped ? () {} : null,
                         tooltip: 'Start Server',
                       ),
                       IconButton(
                         icon: const Icon(Icons.stop),
                         onPressed:
-                        status == ServerStatus.running ? () {} : null,
+                        server.status == ServerStatus.running ? () {} : null,
                         tooltip: 'Stop Server',
                       ),
                       IconButton(
@@ -118,12 +87,12 @@ class ServerCard extends StatelessWidget {
               // Server info
               _InfoRow(
                 label: 'Version',
-                value: version,
+                value: server.version,
               ),
               const SizedBox(height: 4),
               _InfoRow(
                 label: 'Port',
-                value: port.toString(),
+                value: server.port.toString(),
               ),
               const SizedBox(height: 4),
               Row(
