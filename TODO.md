@@ -14,6 +14,7 @@
 - [x] Implementare il sistema di aggiunta automatica dei server alla homepage
 - [x] Aggiungere la validazione dei campi nel form di creazione
 - [x] Implementare il sistema di gestione delle versioni dei server
+- [ ] Ottimizzazione della memoria per i server a lungo termine
 
 ### UI/UX Improvements
 - [x] Aggiungere spazi corretti nel layout delle impostazioni
@@ -44,6 +45,12 @@
   - [ ] Link alla pagina GitHub
   - [ ] Changelog
 - [ ] Implementare sistema di controllo aggiornamenti
+
+### La gestione dell'output della console necessita di ulteriori miglioramenti:
+- [ ] Migliore analisi e formattazione dei log
+- [ ] Gestione della posizione di scorrimento
+- [ ] Funzionalità di ricerca/filtraggio dei log
+- [ ] Correggere lo spam della console
 
 ## Additional Features
 
