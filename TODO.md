@@ -47,10 +47,10 @@
 - [ ] Implementare sistema di controllo aggiornamenti
 
 ### La gestione dell'output della console necessita di ulteriori miglioramenti:
-- [ ] Migliore analisi e formattazione dei log
-- [ ] Gestione della posizione di scorrimento
-- [ ] Funzionalità di ricerca/filtraggio dei log
-- [ ] Correggere lo spam della console
+- [x] Migliore analisi e formattazione dei log
+- [x] Gestione della posizione di scorrimento
+- [x] Funzionalità di ricerca/filtraggio dei log
+- [x] Correggere lo spam della console
 
 ## Additional Features
 

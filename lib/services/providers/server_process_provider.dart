@@ -6,7 +6,7 @@ final serverProcessServiceProvider = Provider((ref) => ServerProcessService());
 
 final serverOutputProvider = StreamProvider.family<String, String>((ref, serverId) {
   final service = ref.watch(serverProcessServiceProvider);
-  return service.getServerOutput(serverId) ?? const Stream.empty();
+  return service.getServerOutput(serverId)?.map((output) => output) ?? const Stream.empty();
 });
 
 final serverStatusProvider = StreamProvider.family<ServerStatus, String>((ref, serverId) {
