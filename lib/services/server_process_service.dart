@@ -149,15 +149,14 @@ class ServerProcessService {
       // Handle stdout
       process.stdout.transform(utf8.decoder).listen(
             (output) {
-          print('Server output: $output');
-          outputController.add(output);
-          _parseServerOutput(server.id, output);
+          print('Server output: $output');   // Terminal output
+          outputController.add(output);    // UI output
         },
         onError: (error) {
           print('Error reading stdout: $error');
           outputController.add('Error reading stdout: $error\n');
         },
-      );
+      );;
 
       // Handle stderr
       process.stderr.transform(utf8.decoder).listen(
