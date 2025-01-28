@@ -9,7 +9,7 @@
 - [x] Aggiungere supporto per multiple versioni di Java
 
 ### Server Creation & Management
-- [ ] Implementare una progress bar durante il download del server
+- [x] Implementare una progress bar durante il download del server
 - [ ] Aggiungere una schermata di download separata
 - [x] Implementare il sistema di aggiunta automatica dei server alla homepage
 - [x] Aggiungere la validazione dei campi nel form di creazione
