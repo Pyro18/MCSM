@@ -15,17 +15,32 @@ class ServerProcessService {
   final _playersOnline = <String, int>{};
   final _tps = <String, double>{};
 
+  Future<void> initializeServerStatus(String serverId) async {
+    _serverStatusControllers[serverId] ??= StreamController<ServerStatus>.broadcast();
+
+    if (_runningProcesses.containsKey(serverId)) {
+      _serverStatusControllers[serverId]?.add(ServerStatus.running);
+    } else {
+      _serverStatusControllers[serverId]?.add(ServerStatus.stopped);
+    }
+  }
+
   Stream<String>? getServerOutput(String serverId) {
     _processOutputControllers[serverId] ??= StreamController<String>.broadcast();
     return _processOutputControllers[serverId]?.stream;
   }
 
   Stream<ServerStatus>? getServerStatus(String serverId) {
-    _serverStatusControllers[serverId] ??= StreamController<ServerStatus>.broadcast();
-    // Emit initial status
-    _serverStatusControllers[serverId]?.add(ServerStatus.stopped);
+    if (!_serverStatusControllers.containsKey(serverId)) {
+      initializeServerStatus(serverId);
+    }
     return _serverStatusControllers[serverId]?.stream;
   }
+
+  bool isServerRunning(String serverId) {
+    return _runningProcesses.containsKey(serverId);
+  }
+
 
   Future<void> cleanupServerFiles(String serverPath) async {
     try {
@@ -233,10 +248,6 @@ class ServerProcessService {
     }
 
     process.stdin.writeln(command);
-  }
-
-  bool isServerRunning(String serverId) {
-    return _runningProcesses.containsKey(serverId);
   }
 
   void _parseServerOutput(String serverId, String output) {
