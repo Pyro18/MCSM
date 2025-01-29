@@ -10,7 +10,7 @@
 
 ### Server Creation & Management
 - [x] Implementare una progress bar durante il download del server
-- [ ] Aggiungere una schermata di download separata
+- [x] Aggiungere una schermata di download separata
 - [x] Implementare il sistema di aggiunta automatica dei server alla homepage
 - [x] Aggiungere la validazione dei campi nel form di creazione
 - [x] Implementare il sistema di gestione delle versioni dei server

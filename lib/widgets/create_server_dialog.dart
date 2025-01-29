@@ -9,6 +9,7 @@ import '../services/providers/minecraft_provider.dart';
 import '../services/providers/servers_provider.dart';
 import '../services/providers/settings_provider.dart';
 import 'confetti_overlay.dart';
+import 'download_progress_overlay.dart';
 
 class CreateServerDialog extends ConsumerStatefulWidget {
   const CreateServerDialog({super.key});
@@ -61,7 +62,9 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
     if (!_formKey.currentState!.validate() || _version == null) return;
 
     setState(() => _isLoading = true);
-    downloadId = '${_name}_${DateTime.now().millisecondsSinceEpoch}';
+    downloadId = '${_name}_${DateTime
+        .now()
+        .millisecondsSinceEpoch}';
 
     final downloadsNotifier = ref.read(downloadsProvider.notifier);
     downloadsNotifier.addDownload(downloadId, _name, _version!);
@@ -91,15 +94,15 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
 
       print('Adding server to provider...');
       await ref.read(serversProvider.notifier).addServer(
-            _name,
-            _version!,
-            _serverType,
-            serverPath,
-            _port,
-            _memory,
-            _autoStart,
-            settingsData.javaPath,
-          );
+        _name,
+        _version!,
+        _serverType,
+        serverPath,
+        _port,
+        _memory,
+        _autoStart,
+        settingsData.javaPath,
+      );
       print('Server added to provider successfully');
 
       if (mounted) {
@@ -136,6 +139,12 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
       }
     });
 
+    // Se stiamo scaricando, mostra il dialog di progresso
+    if (_isLoading && downloadId.isNotEmpty) {
+      return DownloadProgressOverlay(downloadId: downloadId);
+    }
+
+    // Altrimenti mostra il form di creazione
     return Dialog(
       child: Container(
         width: 500,
@@ -204,9 +213,9 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                   value: _version,
                   items: versions
                       .map((v) => DropdownMenuItem<String>(
-                            value: v.id,
-                            child: Text(v.id),
-                          ))
+                    value: v.id,
+                    child: Text(v.id),
+                  ))
                       .toList(),
                   validator: (value) {
                     if (value == null) {
@@ -319,7 +328,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                 children: [
                   TextButton(
                     onPressed:
-                        _isLoading ? null : () => Navigator.of(context).pop(),
+                    _isLoading ? null : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 8),
@@ -327,12 +336,12 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                     onPressed: _isLoading ? null : _createServer,
                     child: _isLoading
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                      ),
+                    )
                         : const Text('Create Server'),
                   ),
                 ],
