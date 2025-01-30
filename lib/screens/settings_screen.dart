@@ -53,7 +53,6 @@ class SettingsScreen extends ConsumerWidget {
       final installations = await javaService.detectJavaInstallations();
 
       if (installations.isNotEmpty) {
-        // Prende la prima installazione trovata
         final newSettings = currentSettings.copyWith(
           javaPath: installations.first.path,
         );
@@ -99,7 +98,7 @@ class SettingsScreen extends ConsumerWidget {
         data: (settings) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header fisso
+            // Header
             const Text(
               'Settings',
               style: TextStyle(
@@ -109,7 +108,6 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            // Contenuto scrollabile
             Expanded(
               child: SingleChildScrollView(
                 child: Column(

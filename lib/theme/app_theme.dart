@@ -1,25 +1,35 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
+  static const backgroundDark = Color(0xFF1A1C1E);
+  static const surfaceDark = Color(0xFF2B2D31);
+  static const primaryGreen = Color(0xFF00E676);
+  static const secondaryGrey = Color(0xFF9BA1A6);
+
   static ThemeData get darkTheme {
     return ThemeData.dark().copyWith(
-      scaffoldBackgroundColor: const Color(0xFF1a1b1e),
-      primaryColor: Colors.blue,
+      scaffoldBackgroundColor: backgroundDark,
+      primaryColor: primaryGreen,
       colorScheme: const ColorScheme.dark(
-        primary: Colors.blue,
-        secondary: Color(0xFF64748b),
-        surface: Color(0xFF2f2f2f),
-        background: Color(0xFF1a1b1e),
+        primary: primaryGreen,
+        secondary: secondaryGrey,
+        surface: surfaceDark,
+        background: backgroundDark,
       ),
       cardTheme: CardTheme(
-        color: const Color(0xFF2f2f2f),
+        color: surfaceDark,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
         ),
+        elevation: 0,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF2f2f2f),
+        fillColor: surfaceDark,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide.none,
@@ -30,19 +40,28 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.blue, width: 2),
+          borderSide: const BorderSide(color: primaryGreen, width: 2),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
+          backgroundColor: primaryGreen,
+          foregroundColor: Colors.black,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
         ),
       ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: primaryGreen,
+        ),
+      ),
+      iconTheme: const IconThemeData(
+        color: secondaryGrey,
+      ),
+      dividerColor: surfaceDark,
     );
   }
 }

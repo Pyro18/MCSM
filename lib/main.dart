@@ -39,7 +39,11 @@ void main() async {
 
     runApp(
       ProviderScope(
-        child: MCSMApp(navigatorKey: navigatorKey),
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          debugShowCheckedModeBanner: false,
+          home: MCSMApp(navigatorKey: navigatorKey),
+        )
       ),
     );
   } catch (e, stack) {

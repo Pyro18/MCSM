@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 class Sidebar extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
@@ -13,27 +15,32 @@ class Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 250,
-      color: Theme.of(context).colorScheme.surface,
+      width: 240,
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: Column(
         children: [
-          // Header
+          // Header with logo
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 1,
-                ),
-              ),
-            ),
-            child: const Row(
+            child: Row(
               children: [
-                Text(
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.dns,
+                    color: AppTheme.primaryGreen,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
                   'MCSM',
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -41,14 +48,17 @@ class Sidebar extends StatelessWidget {
             ),
           ),
 
+          const Divider(height: 1),
+
           // Menu Items
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
+                _SidebarCategory(title: 'SERVERS'),
                 _MenuItem(
                   icon: Icons.dns,
-                  title: 'Servers',
+                  title: 'My Servers',
                   isSelected: selectedIndex == 0,
                   onTap: () => onItemSelected(0),
                 ),
@@ -61,7 +71,51 @@ class Sidebar extends StatelessWidget {
               ],
             ),
           ),
+
+          // Bottom section with version
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'v1.0.0',
+                    style: TextStyle(
+                      color: AppTheme.secondaryGrey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _SidebarCategory extends StatelessWidget {
+  final String title;
+
+  const _SidebarCategory({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.secondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -83,30 +137,39 @@ class _MenuItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: isSelected
-          ? Theme.of(context).primaryColor.withOpacity(0.1)
-          : Colors.transparent,
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primaryGreen.withOpacity(0.1) : null,
+            border: isSelected
+                ? Border(
+              left: BorderSide(
+                color: AppTheme.primaryGreen,
+                width: 3,
+              ),
+            )
+                : null,
+          ),
           child: Row(
             children: [
               Icon(
                 icon,
-                color: isSelected
-                    ? Theme.of(context).primaryColor
-                    : Theme.of(context).iconTheme.color,
                 size: 20,
+                color: isSelected
+                    ? AppTheme.primaryGreen
+                    : Theme.of(context).colorScheme.secondary,
               ),
               const SizedBox(width: 12),
               Text(
                 title,
                 style: TextStyle(
                   color: isSelected
-                      ? Theme.of(context).primaryColor
-                      : Theme.of(context).textTheme.bodyLarge?.color,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      ? AppTheme.primaryGreen
+                      : Theme.of(context).colorScheme.onSurface,
+                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
                 ),
               ),
             ],

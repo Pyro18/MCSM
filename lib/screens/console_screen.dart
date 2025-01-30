@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 enum LogType { info, warning, error, success, command }
 
@@ -16,11 +17,12 @@ class ConsoleMessage {
     this.count = 1,
   });
 
-  String get formattedTime => '${timestamp.hour.toString().padLeft(2, '0')}:'
-      '${timestamp.minute.toString().padLeft(2, '0')}:'
-      '${timestamp.second.toString().padLeft(2, '0')}';
+  String get formattedTime =>
+      '${timestamp.hour.toString().padLeft(2, '0')}:'
+          '${timestamp.minute.toString().padLeft(2, '0')}:'
+          '${timestamp.second.toString().padLeft(2, '0')}';
 
-  Color get color {
+  Color getColor(BuildContext context) {
     switch (type) {
       case LogType.info:
         return Colors.white;
@@ -31,7 +33,7 @@ class ConsoleMessage {
       case LogType.success:
         return Colors.green;
       case LogType.command:
-        return Colors.cyan;
+        return Colors.blue;
     }
   }
 
@@ -113,7 +115,6 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
         _messages.add(ConsoleMessage.fromString(output));
       }
 
-      // Se siamo in auto-scroll, programmiamo uno scroll al fondo
       if (_autoScroll) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       }
@@ -172,7 +173,6 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
     });
 
     _commandController.clear();
-
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
@@ -189,7 +189,7 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
   List<ConsoleMessage> _getFilteredMessages() {
     return _messages.where((msg) {
       final matchesSearch =
-          msg.text.toLowerCase().contains(_searchTerm.toLowerCase());
+      msg.text.toLowerCase().contains(_searchTerm.toLowerCase());
       final matchesFilter = _activeFilters.contains(msg.type);
       return matchesSearch && matchesFilter;
     }).toList();
@@ -198,14 +198,6 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
   @override
   Widget build(BuildContext context) {
     final filteredMessages = _getFilteredMessages();
-
-    if (_autoScroll) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollToBottom();
-        }
-      });
-    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,6 +213,7 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
               ),
             ),
             const SizedBox(width: 16),
+
             // Search Box
             Expanded(
               child: TextField(
@@ -230,12 +223,12 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _searchTerm.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchTerm = '');
-                          },
-                        )
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchTerm = '');
+                    },
+                  )
                       : null,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -245,6 +238,7 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
               ),
             ),
             const SizedBox(width: 16),
+
             // Filter Chips
             for (final type in LogType.values)
               Padding(
@@ -253,6 +247,8 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
                   label: Text(type.name.toUpperCase()),
                   selected: _activeFilters.contains(type),
                   onSelected: (_) => _toggleFilter(type),
+                  backgroundColor: Theme.of(context).chipTheme.backgroundColor,
+                  selectedColor: AppTheme.primaryGreen.withOpacity(0.2),
                 ),
               ),
           ],
@@ -263,75 +259,63 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
         Expanded(
           child: Stack(
             children: [
-              NotificationListener<ScrollNotification>(
-                onNotification: (notification) {
-                  if (notification is UserScrollNotification) {
-                    setState(() {
-                      _autoScroll = false;
-                    });
-                  }
-                  return false;
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: RawScrollbar(
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Scrollbar(
+                  controller: _scrollController,
+                  thumbVisibility: true,
+                  radius: const Radius.circular(4),
+                  child: ListView.builder(
                     controller: _scrollController,
-                    thumbVisibility: true,
-                    thickness: 8,
-                    radius: const Radius.circular(4),
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(16),
-                      itemCount: filteredMessages.length,
-                      itemBuilder: (context, index) {
-                        final message = filteredMessages[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                message.formattedTime,
-                                style: TextStyle(
-                                  color:
-                                      Theme.of(context).colorScheme.secondary,
-                                  fontFamily: 'monospace',
-                                ),
+                    padding: const EdgeInsets.all(16),
+                    itemCount: filteredMessages.length,
+                    itemBuilder: (context, index) {
+                      final message = filteredMessages[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              message.formattedTime,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.secondary,
+                                fontFamily: 'monospace',
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text.rich(
-                                  TextSpan(
-                                    children: [
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: RichText(
+                                text: TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: message.text,
+                                      style: TextStyle(
+                                        color: message.getColor(context),
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                    if (message.count > 1)
                                       TextSpan(
-                                        text: message.text,
+                                        text: ' (×${message.count})',
                                         style: TextStyle(
-                                          color: message.color,
-                                          fontFamily: 'monospace',
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .secondary,
+                                          fontSize: 12,
                                         ),
                                       ),
-                                      if (message.count > 1)
-                                        TextSpan(
-                                          text: ' (×${message.count})',
-                                          style: TextStyle(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .secondary,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
