@@ -1,12 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/server_types.dart';
 import '../models/minecraft_server.dart';
+import '../models/server_types.dart';
 import '../screens/server_detail_screen.dart';
 import '../services/providers/server_process_provider.dart';
-import 'server_action_dialog.dart';
+import '../theme/app_theme.dart';
 
 class ServerCard extends ConsumerWidget {
   final MinecraftServer server;
@@ -19,7 +17,7 @@ class ServerCard extends ConsumerWidget {
   Color _getStatusColor(ServerStatus status) {
     switch (status) {
       case ServerStatus.running:
-        return Colors.green;
+        return AppTheme.primaryGreen;
       case ServerStatus.stopped:
         return Colors.grey;
       case ServerStatus.error:
@@ -30,180 +28,117 @@ class ServerCard extends ConsumerWidget {
     }
   }
 
-  Future<void> _handleStartServer(BuildContext context, WidgetRef ref) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => ServerActionDialog(
-        serverName: server.name,
-        targetStatus: ServerStatus.running,
-      ),
-    );
-
-    try {
-      final service = ref.read(serverProcessServiceProvider);
-      await service.startServer(server);
-
-      // Attendiamo un paio di secondi per dare tempo al server di iniziare
-      await Future.delayed(const Duration(seconds: 3));
-
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error starting server: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (context.mounted) {
-        Navigator.of(context).pop(); // Chiude il dialog
-      }
-    }
-  }
-
-  Future<void> _handleStopServer(BuildContext context, WidgetRef ref) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => ServerActionDialog(
-        serverName: server.name,
-        targetStatus: ServerStatus.stopped,
-      ),
-    );
-
-    try {
-      final service = ref.read(serverProcessServiceProvider);
-      await service.stopServer(server.id);
-
-      // Aspettiamo qualche secondo per dare tempo al server di fermarsi
-      await Future.delayed(const Duration(seconds: 2));
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error stopping server: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (context.mounted) {
-        Navigator.of(context).pop(); // Chiude il dialog
-      }
-    }
-  }
-
-  String _getStatusText(ServerStatus status) {
-    return status.displayName;
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Inizializziamo subito il service per questo server
-    final service = ref.read(serverProcessServiceProvider);
-    service.initializeServerStatus(server.id);
-
-    // Ora osserviamo lo stato
     final statusAsync = ref.watch(serverStatusProvider(server.id));
+    final service = ref.read(serverProcessServiceProvider);
 
     return Card(
+      margin: EdgeInsets.zero,
       child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => ServerDetailScreen(
-                server: server,
-              ),
-            ),
-          );
-        },
-        child: Padding(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => ServerDetailScreen(server: server),
+          ),
+        ),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header with name and actions
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      server.name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          server.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.surfaceDark,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                server.version,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).colorScheme.secondary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.surfaceDark,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                server.type.displayName,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).colorScheme.secondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  Row(
-                    children: [
-                      // Mostriamo subito i pulsanti con lo stato corretto
-                      statusAsync.when(
-                        data: (status) => Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.play_arrow),
-                              onPressed: status == ServerStatus.stopped
-                                  ? () => _handleStartServer(context, ref)
-                                  : null,
-                              tooltip: 'Start Server',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.stop),
-                              onPressed: status == ServerStatus.running
-                                  ? () => _handleStopServer(context, ref)
-                                  : null,
-                              tooltip: 'Stop Server',
-                            ),
-                          ],
+                  // Action Buttons
+                  statusAsync.when(
+                    data: (status) => Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            status == ServerStatus.running
+                                ? Icons.stop
+                                : Icons.play_arrow,
+                            color: AppTheme.primaryGreen,
+                          ),
+                          onPressed: status == ServerStatus.running
+                              ? () => service.stopServer(server.id)
+                              : () => service.startServer(server),
                         ),
-                        loading: () => const Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.play_arrow),
-                              onPressed: null,
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.stop),
-                              onPressed: null,
-                            ),
-                          ],
+                        IconButton(
+                          icon: const Icon(Icons.settings),
+                          onPressed: () {},
                         ),
-                        error: (_, __) => const Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.play_arrow),
-                              onPressed: null,
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.stop),
-                              onPressed: null,
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.settings),
-                        onPressed: () {},
-                        tooltip: 'Settings',
-                      ),
-                    ],
+                      ],
+                    ),
+                    loading: () => const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    error: (_, __) => const Icon(Icons.error, color: Colors.red),
                   ),
                 ],
               ),
               const Spacer(),
-              _InfoRow(
-                label: 'Version',
-                value: server.version,
-              ),
-              const SizedBox(height: 4),
-              _InfoRow(
-                label: 'Port',
-                value: server.port.toString(),
-              ),
-              const SizedBox(height: 4),
+              // Status indicator
               statusAsync.when(
                 data: (status) => Row(
                   children: [
@@ -217,10 +152,10 @@ class ServerCard extends ConsumerWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      _getStatusText(status),
+                      status.displayName,
                       style: TextStyle(
                         color: _getStatusColor(status),
-                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
                       ),
                     ),
                   ],
@@ -235,31 +170,6 @@ class ServerCard extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          '$label: ',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.secondary,
-          ),
-        ),
-        Text(value),
-      ],
     );
   }
 }

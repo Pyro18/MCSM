@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/minecraft_server.dart';
 import '../models/server_types.dart';
 import '../services/providers/server_process_provider.dart';
 import '../theme/app_theme.dart';
-
 import '../widgets/eula_dialog.dart';
+import '../widgets/server_settings_dialog.dart';
 import 'console_screen.dart';
 
 class ServerDetailScreen extends ConsumerStatefulWidget {
@@ -20,7 +21,8 @@ class ServerDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<ServerDetailScreen> createState() => _ServerDetailScreenState();
 }
 
-class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with SingleTickerProviderStateMixin {
+class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _showSettings = false;
   bool _eulaDialogShown = false;
@@ -82,23 +84,41 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with Si
   Widget _buildHeader(ServerStatus status) {
     return Container(
       padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.grey.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
           ),
           const SizedBox(width: 16),
+          // Server Icon
           Container(
-            width: 64,
-            height: 64,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.dns, color: AppTheme.primaryGreen, size: 32),
+            child:
+                const Icon(Icons.dns, color: AppTheme.primaryGreen, size: 24),
           ),
           const SizedBox(width: 16),
+          // Server Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,39 +126,102 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with Si
                 Text(
                   widget.server.name,
                   style: const TextStyle(
-                    fontSize: 24,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    _buildInfoChip(
-                      widget.server.version,
-                      Icons.update,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.memory, size: 16),
+                          const SizedBox(width: 4),
+                          Text(widget.server.version),
+                        ],
+                      ),
                     ),
                     const SizedBox(width: 8),
-                    _buildInfoChip(
-                      widget.server.type.displayName,
-                      Icons.settings_ethernet,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.dns_outlined, size: 16),
+                          const SizedBox(width: 4),
+                          Text(widget.server.type.displayName),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    _buildStatusChip(status),
                   ],
                 ),
               ],
             ),
           ),
+          // Action Buttons
           Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
+              // Server Status Indicator
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: status == ServerStatus.running
+                            ? AppTheme.primaryGreen
+                            : status == ServerStatus.stopped
+                                ? Colors.grey
+                                : Colors.orange,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      status.displayName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Play/Stop Button
               if (status == ServerStatus.stopped)
                 ElevatedButton.icon(
-                  icon: const Icon(Icons.play_arrow),
+                  icon: const Icon(Icons.play_arrow,
+                      size: 20, color: Colors.black),
                   label: const Text('Play'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryGreen,
                     foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                   onPressed: () => ref
                       .read(serverProcessServiceProvider)
@@ -146,19 +229,32 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with Si
                 )
               else
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.stop),
+                  icon: const Icon(Icons.stop, size: 20),
                   label: const Text('Stop'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                   onPressed: () => ref
                       .read(serverProcessServiceProvider)
                       .stopServer(widget.server.id),
                 ),
               const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.settings),
-                onPressed: () => setState(() => _showSettings = true),
+              // Settings Button
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: () => setState(() => _showSettings = true),
+                  tooltip: 'Settings',
+                ),
               ),
             ],
           ),
@@ -204,8 +300,8 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with Si
               color: status == ServerStatus.running
                   ? Colors.green
                   : status == ServerStatus.stopped
-                  ? Colors.grey
-                  : Colors.orange,
+                      ? Colors.grey
+                      : Colors.orange,
             ),
           ),
           Text(status.displayName),
@@ -216,18 +312,13 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with Si
 
   Widget _buildTabBar() {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
-        color: Colors.black26,
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).dividerColor,
-            width: 1,
-          ),
-        ),
+        color: Colors.grey[900],
       ),
       child: Row(
         children: [
-          _buildTab('IDK', 0),
+          _buildTab('Overview', 0),
           _buildTab('Console', 1),
         ],
       ),
@@ -236,24 +327,35 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with Si
 
   Widget _buildTab(String label, int index) {
     final selected = _tabController.index == index;
-    return InkWell(
-      onTap: () => _tabController.animateTo(index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.primaryGreen.withOpacity(0.1) : Colors.transparent,
-          border: Border(
-            bottom: BorderSide(
-              color: selected ? AppTheme.primaryGreen : Colors.transparent,
-              width: 2,
-            ),
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: () => _tabController.animateTo(index),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppTheme.primaryGreen.withOpacity(0.1)
+                : Colors.transparent,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? AppTheme.primaryGreen : Colors.grey,
-            fontWeight: selected ? FontWeight.w500 : FontWeight.normal,
+          child: Row(
+            children: [
+              Icon(
+                index == 0 ? Icons.dashboard : Icons.terminal,
+                size: 18,
+                color: selected ? AppTheme.primaryGreen : Colors.grey,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? AppTheme.primaryGreen : Colors.grey,
+                  fontWeight: selected ? FontWeight.w500 : FontWeight.normal,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -262,19 +364,19 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with Si
 
   Widget _buildLogs(String? output) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       child: Column(
         children: [
           // Log Controls
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _selectedLogFile,
@@ -292,39 +394,32 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with Si
                       onChanged: (value) {
                         if (value != null) {
                           setState(() => _selectedLogFile = value);
-                          // TODO: implement log file selection
                         }
                       },
+                      style: const TextStyle(fontSize: 14),
+                      icon: const Icon(Icons.arrow_drop_down),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.copy),
-                onPressed: () {
-                  // TODO: implement copy functionality
-                },
-                tooltip: 'Copy',
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () {
-                  // TODO: implement clear functionality
-                },
-                tooltip: 'Clear',
-              ),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: () {
-                  // TODO: implement refresh functionality
-                },
-                tooltip: 'Refresh',
-              ),
-            ],
+                IconButton(
+                  icon: const Icon(Icons.copy, size: 20),
+                  onPressed: () {},
+                  tooltip: 'Copy',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  onPressed: () {},
+                  tooltip: 'Clear',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: () {},
+                  tooltip: 'Refresh',
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
-
           // Console Output
           Expanded(
             child: ConsoleScreen(
@@ -390,239 +485,10 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen> with Si
             ],
           ),
           if (_showSettings)
-            _ServerSettingsDialog(
+            ServerSettingsDialog(
               server: widget.server,
               onClose: () => setState(() => _showSettings = false),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ServerSettingsDialog extends StatelessWidget {
-  final MinecraftServer server;
-  final VoidCallback onClose;
-
-  const _ServerSettingsDialog({
-    required this.server,
-    required this.onClose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onClose,
-      child: Container(
-        color: Colors.black54,
-        child: Center(
-          child: GestureDetector(
-            onTap: () {}, // Prevent tap from closing dialog
-            child: Container(
-              width: 600,
-              margin: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Dialog Header
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.dns),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${server.name} > Settings',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: onClose,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1),
-
-                  // Settings Content
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _SettingsSection(
-                              title: 'General',
-                              children: [
-                                _SettingsField(
-                                  label: 'Name',
-                                  value: server.name,
-                                ),
-                                _SettingsField(
-                                  label: 'Server Type',
-                                  value: server.type.displayName,
-                                ),
-                                _SettingsField(
-                                  label: 'Version',
-                                  value: server.version,
-                                ),
-                              ],
-                            ),
-                            _SettingsSection(
-                              title: 'Installation',
-                              children: [
-                                _SettingsField(
-                                  label: 'Path',
-                                  value: server.path,
-                                  subtitle: 'Location where server files are stored',
-                                ),
-                                _SettingsField(
-                                  label: 'Java Path',
-                                  value: server.javaPath,
-                                  subtitle: 'Java executable used to run the server',
-                                ),
-                              ],
-                            ),
-                            _SettingsSection(
-                              title: 'Server Configuration',
-                              children: [
-                                _SettingsField(
-                                  label: 'Port',
-                                  value: server.port.toString(),
-                                ),
-                                _SettingsField(
-                                  label: 'Memory',
-                                  value: '${server.memory}MB',
-                                ),
-                                _SettingsField(
-                                  label: 'Auto Start',
-                                  value: server.autoStart ? 'Yes' : 'No',
-                                ),
-                              ],
-                            ),
-                            _SettingsSection(
-                              title: 'Danger Zone',
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: ElevatedButton.icon(
-                                    icon: const Icon(Icons.delete_forever),
-                                    label: const Text('Delete Server'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    onPressed: () {
-                                      // TODO: Implement delete functionality
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsSection extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _SettingsSection({
-    required this.title,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            children: children,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingsField extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? subtitle;
-
-  const _SettingsField({
-    required this.label,
-    required this.value,
-    this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-            ),
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              subtitle!,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
-            ),
-          ],
         ],
       ),
     );
