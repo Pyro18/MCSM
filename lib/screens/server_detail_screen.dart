@@ -6,6 +6,7 @@ import '../models/server_types.dart';
 import '../services/providers/server_process_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/eula_dialog.dart';
+import '../widgets/play_time_display.dart';
 import '../widgets/server_settings_dialog.dart';
 import 'console_screen.dart';
 
@@ -166,6 +167,8 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen>
                         ],
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    PlayTimeDisplay(playTime: widget.server.totalPlayTime),
                   ],
                 ),
               ],

@@ -9,6 +9,7 @@ class MinecraftServer {
   static const _minMemory = 512;
   static const _maxMemory = 32768;
 
+
   final String id;
   final String name;
   final String version;
@@ -21,8 +22,9 @@ class MinecraftServer {
   final String javaPath;
   final Map<String, dynamic> properties;
   final DateTime createdAt;
-  final DateTime? lastStarted;
   final String schemaVersion;
+  final Duration totalPlayTime;
+  final DateTime? lastStartTime;
 
   MinecraftServer._({
     required this.id,
@@ -37,7 +39,8 @@ class MinecraftServer {
     required this.javaPath,
     required this.properties,
     required this.createdAt,
-    this.lastStarted,
+    this.lastStartTime,
+    required this.totalPlayTime,
     this.schemaVersion = '1.0.0',
   });
 
@@ -54,7 +57,8 @@ class MinecraftServer {
     required String javaPath,
     Map<String, dynamic> properties = const {},
     DateTime? createdAt,
-    DateTime? lastStarted,
+    DateTime? lastStartTime,
+    Duration? totalPlayTime,
     String schemaVersion = '1.0.0',
   }) {
     // Validazione
@@ -99,10 +103,48 @@ class MinecraftServer {
       javaPath: javaPath,
       properties: Map.from(properties),
       createdAt: createdAt ?? DateTime.now(),
-      lastStarted: lastStarted,
+      lastStartTime: lastStartTime,
+      totalPlayTime: totalPlayTime ?? Duration.zero,
       schemaVersion: schemaVersion,
     );
   }
+
+  MinecraftServer copyWith({
+    String? id,
+    String? name,
+    String? version,
+    ServerType? type,
+    String? path,
+    int? port,
+    int? memory,
+    bool? autoStart,
+    ServerStatus? status,
+    String? javaPath,
+    Map<String, dynamic>? properties,
+    DateTime? createdAt,
+    DateTime? lastStartTime,
+    Duration? totalPlayTime,
+    String? schemaVersion,
+  }) {
+    return MinecraftServer(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      version: version ?? this.version,
+      type: type ?? this.type,
+      path: path ?? this.path,
+      port: port ?? this.port,
+      memory: memory ?? this.memory,
+      autoStart: autoStart ?? this.autoStart,
+      status: status ?? this.status,
+      javaPath: javaPath ?? this.javaPath,
+      properties: properties ?? this.properties,
+      createdAt: createdAt ?? this.createdAt,
+      lastStartTime: lastStartTime ?? this.lastStartTime,
+      totalPlayTime: totalPlayTime ?? this.totalPlayTime,
+      schemaVersion: schemaVersion ?? this.schemaVersion,
+    );
+  }
+
 
   Map<String, dynamic> toJson() {
     final json = {
@@ -118,11 +160,13 @@ class MinecraftServer {
       'javaPath': javaPath,
       'properties': properties,
       'createdAt': createdAt.toIso8601String(),
+      'totalPlayTime': totalPlayTime.inSeconds,
+      'lastStartTime': lastStartTime?.toIso8601String(),
       'schemaVersion': schemaVersion,
     };
 
-    if (lastStarted != null) {
-      json['lastStarted'] = lastStarted!.toIso8601String();
+    if (lastStartTime != null) {
+      json['lastStarted'] = lastStartTime!.toIso8601String();
     }
 
     return json;
@@ -147,9 +191,10 @@ class MinecraftServer {
       javaPath: json['javaPath'] as String,
       properties: json['properties'] as Map<String, dynamic>? ?? {},
       createdAt: DateTime.parse(json['createdAt'] as String),
-      lastStarted: json['lastStarted'] == null
+      totalPlayTime: Duration(seconds: json['totalPlayTime'] as int? ?? 0),
+      lastStartTime: json['lastStartTime'] == null
           ? null
-          : DateTime.parse(json['lastStarted'] as String),
+          : DateTime.parse(json['lastStartTime'] as String),
     );
   }
 }

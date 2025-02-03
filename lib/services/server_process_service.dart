@@ -4,6 +4,7 @@ import 'dart:io';
 
 import '../models/minecraft_server.dart';
 import '../models/server_types.dart';
+import 'storage/app_storage.dart';
 
 class ServerProcessService {
   final _runningProcesses = <String, Process>{};
@@ -14,9 +15,11 @@ class ServerProcessService {
   final _cpuUsage = <String, double>{};
   final _playersOnline = <String, int>{};
   final _tps = <String, double>{};
+  final _playTimeUpdateTimer = <String, Timer>{};
 
   Future<void> initializeServerStatus(String serverId) async {
-    _serverStatusControllers[serverId] ??= StreamController<ServerStatus>.broadcast();
+    _serverStatusControllers[serverId] ??=
+        StreamController<ServerStatus>.broadcast();
 
     if (_runningProcesses.containsKey(serverId)) {
       _serverStatusControllers[serverId]?.add(ServerStatus.running);
@@ -26,7 +29,8 @@ class ServerProcessService {
   }
 
   Stream<String>? getServerOutput(String serverId) {
-    _processOutputControllers[serverId] ??= StreamController<String>.broadcast();
+    _processOutputControllers[serverId] ??=
+        StreamController<String>.broadcast();
     return _processOutputControllers[serverId]?.stream;
   }
 
@@ -40,7 +44,6 @@ class ServerProcessService {
   bool isServerRunning(String serverId) {
     return _runningProcesses.containsKey(serverId);
   }
-
 
   Future<void> cleanupServerFiles(String serverPath) async {
     try {
@@ -65,8 +68,10 @@ class ServerProcessService {
     }
 
     // Ensure stream controllers exist
-    _processOutputControllers[server.id] ??= StreamController<String>.broadcast();
-    _serverStatusControllers[server.id] ??= StreamController<ServerStatus>.broadcast();
+    _processOutputControllers[server.id] ??=
+        StreamController<String>.broadcast();
+    _serverStatusControllers[server.id] ??=
+        StreamController<ServerStatus>.broadcast();
 
     final outputController = _processOutputControllers[server.id]!;
 
@@ -81,15 +86,18 @@ class ServerProcessService {
       // Kill any existing Java processes that might be running this server
       if (Platform.isWindows) {
         try {
-          final result = await Process.run('taskkill', ['/F', '/IM', 'java.exe']);
-          outputController.add('Cleaned up background processes: ${result.stdout}\n');
+          final result =
+              await Process.run('taskkill', ['/F', '/IM', 'java.exe']);
+          outputController
+              .add('Cleaned up background processes: ${result.stdout}\n');
         } catch (e) {
           print('Error killing Java processes: $e');
         }
       } else {
         try {
           final result = await Process.run('pkill', ['-f', 'java']);
-          outputController.add('Cleaned up background processes: ${result.stdout}\n');
+          outputController
+              .add('Cleaned up background processes: ${result.stdout}\n');
         } catch (e) {
           print('Error killing Java processes: $e');
         }
@@ -163,19 +171,20 @@ class ServerProcessService {
 
       // Handle stdout
       process.stdout.transform(utf8.decoder).listen(
-            (output) {
-          print('Server output: $output');   // Terminal output
-          outputController.add(output);    // UI output
+        (output) {
+          print('Server output: $output'); // Terminal output
+          outputController.add(output); // UI output
         },
         onError: (error) {
           print('Error reading stdout: $error');
           outputController.add('Error reading stdout: $error\n');
         },
-      );;
+      );
+      ;
 
       // Handle stderr
       process.stderr.transform(utf8.decoder).listen(
-            (output) {
+        (output) {
           print('Server error: $output');
           outputController.add('ERROR: $output');
         },
@@ -198,7 +207,6 @@ class ServerProcessService {
 
       // Update server status to running
       _serverStatusControllers[server.id]?.add(ServerStatus.running);
-
     } catch (e, stack) {
       print('Error starting server: $e');
       print('Stack trace: $stack');
@@ -207,6 +215,15 @@ class ServerProcessService {
       _serverStatusControllers[server.id]?.add(ServerStatus.error);
       rethrow;
     }
+
+    // Start play time tracking
+    _serverStatusControllers[server.id]?.stream.listen((status) {
+      if (status == ServerStatus.running) {
+        _startPlayTimeTracking(server.id, server);
+      } else if (status == ServerStatus.stopped) {
+        _stopPlayTimeTracking(server.id);
+      }
+    });
   }
 
   Future<void> stopServer(String serverId) async {
@@ -240,6 +257,31 @@ class ServerProcessService {
     }
   }
 
+  void _startPlayTimeTracking(String serverId, MinecraftServer server) {
+    _playTimeUpdateTimer[serverId] = Timer.periodic(
+      const Duration(minutes: 1),
+          (_) async {
+        final storage = AppStorage();
+        final servers = await storage.loadServers();
+        final serverIndex = servers.indexWhere((s) => s.id == serverId);
+
+        if (serverIndex != -1) {
+          final updatedServer = servers[serverIndex].copyWith(
+            totalPlayTime: servers[serverIndex].totalPlayTime + const Duration(minutes: 1),
+            lastStartTime: servers[serverIndex].lastStartTime ?? DateTime.now(),
+          );
+
+          servers[serverIndex] = updatedServer;
+          await storage.saveServers(servers);
+        }
+      },
+    );
+  }
+
+  void _stopPlayTimeTracking(String serverId) {
+    _playTimeUpdateTimer[serverId]?.cancel();
+    _playTimeUpdateTimer.remove(serverId);
+  }
 
   Future<void> sendCommand(String serverId, String command) async {
     final process = _runningProcesses[serverId];
@@ -253,7 +295,8 @@ class ServerProcessService {
   void _parseServerOutput(String serverId, String output) {
     // Parse TPS
     if (output.contains('TPS from last 1m, 5m, 15m:')) {
-      final tpsMatch = RegExp(r'TPS from last 1m, 5m, 15m: ([0-9.]+),').firstMatch(output);
+      final tpsMatch =
+          RegExp(r'TPS from last 1m, 5m, 15m: ([0-9.]+),').firstMatch(output);
       if (tpsMatch != null) {
         _tps[serverId] = double.parse(tpsMatch.group(1)!);
       }
@@ -295,17 +338,20 @@ class ServerProcessService {
   Future<void> _updateProcessMetrics(String serverId, Process process) async {
     try {
       if (Platform.isWindows) {
-        final result = await Process.run('tasklist', ['/FI', 'PID eq ${process.pid}', '/FO', 'CSV']);
+        final result = await Process.run(
+            'tasklist', ['/FI', 'PID eq ${process.pid}', '/FO', 'CSV']);
         final lines = result.stdout.toString().split('\n');
         if (lines.length > 1) {
           final parts = lines[1].split(',');
           if (parts.length > 4) {
             // Memory in KB, convert to MB
-            _memoryUsage[serverId] = int.parse(parts[4].replaceAll(RegExp(r'[^0-9]'), '')) ~/ 1024;
+            _memoryUsage[serverId] =
+                int.parse(parts[4].replaceAll(RegExp(r'[^0-9]'), '')) ~/ 1024;
           }
         }
       } else {
-        final result = await Process.run('ps', ['-p', '${process.pid}', '-o', '%cpu,%mem,rss']);
+        final result = await Process.run(
+            'ps', ['-p', '${process.pid}', '-o', '%cpu,%mem,rss']);
         final lines = result.stdout.toString().split('\n');
         if (lines.length > 1) {
           final parts = lines[1].trim().split(RegExp(r'\s+'));
