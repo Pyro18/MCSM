@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'screens/home_screen.dart';
-import 'services/settings_service.dart';
-import 'theme/app_theme.dart';
+import 'presentation/screens/home/home_screen.dart';
+import 'data/datasources/remote/settings_service.dart';
+import 'core/theme/app_theme.dart';
+
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
