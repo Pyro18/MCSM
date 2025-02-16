@@ -426,11 +426,13 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen>
           // Console Output
           Expanded(
             child: ConsoleScreen(
+              serverId: widget.server.id,
               output: output,
               onSendCommand: (command) {
                 final service = ref.read(serverProcessServiceProvider);
                 service.sendCommand(widget.server.id, command);
               },
+              serverPath: widget.server.path,
             ),
           ),
         ],
@@ -475,11 +477,20 @@ class _ServerDetailScreenState extends ConsumerState<ServerDetailScreen>
                         ),
                       ),
                     ),
-                    _buildLogs(
-                      outputAsync.when(
-                        data: (output) => output,
-                        loading: () => null,
-                        error: (_, __) => null,
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: ConsoleScreen(
+                        serverId: widget.server.id,
+                        output: outputAsync.when(
+                          data: (output) => output,
+                          loading: () => null,
+                          error: (_, __) => null,
+                        ),
+                        onSendCommand: (command) {
+                          final service = ref.read(serverProcessServiceProvider);
+                          service.sendCommand(widget.server.id, command);
+                        },
+                        serverPath: widget.server.path,
                       ),
                     ),
                   ],

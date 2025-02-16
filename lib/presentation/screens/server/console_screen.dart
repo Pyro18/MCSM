@@ -1,75 +1,24 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
-
-enum LogType { info, warning, error, success, command }
-
-class ConsoleMessage {
-  final String text;
-  final LogType type;
-  final DateTime timestamp;
-  int count;
-
-  ConsoleMessage({
-    required this.text,
-    required this.type,
-    required this.timestamp,
-    this.count = 1,
-  });
-
-  String get formattedTime =>
-      '${timestamp.hour.toString().padLeft(2, '0')}:'
-          '${timestamp.minute.toString().padLeft(2, '0')}:'
-          '${timestamp.second.toString().padLeft(2, '0')}';
-
-  Color getColor(BuildContext context) {
-    switch (type) {
-      case LogType.info:
-        return Colors.white;
-      case LogType.warning:
-        return Colors.orange;
-      case LogType.error:
-        return Colors.red;
-      case LogType.success:
-        return Colors.green;
-      case LogType.command:
-        return Colors.blue;
-    }
-  }
-
-  factory ConsoleMessage.fromString(String text) {
-    final now = DateTime.now();
-    final lowerText = text.toLowerCase();
-
-    LogType type;
-    if (lowerText.contains('error') || lowerText.contains('exception')) {
-      type = LogType.error;
-    } else if (lowerText.contains('warn')) {
-      type = LogType.warning;
-    } else if (lowerText.contains('success') || lowerText.contains('done')) {
-      type = LogType.success;
-    } else {
-      type = LogType.info;
-    }
-
-    return ConsoleMessage(
-      text: text,
-      type: type,
-      timestamp: now,
-    );
-  }
-}
+import '../../providers/server/console_provider.dart';
 
 class ConsoleScreen extends ConsumerStatefulWidget {
+  final String serverId;
   final String? output;
   final void Function(String) onSendCommand;
   final bool autoScroll;
+  final String serverPath;
 
   const ConsoleScreen({
     super.key,
+    required this.serverId,
     this.output,
     required this.onSendCommand,
     this.autoScroll = true,
+    required this.serverPath,
   });
 
   @override
@@ -80,12 +29,10 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
   final TextEditingController _commandController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<ConsoleMessage> _messages = [];
 
   bool _showScrollButton = false;
   bool _autoScroll = true;
   String _searchTerm = '';
-  Set<LogType> _activeFilters = LogType.values.toSet();
 
   @override
   void initState() {
@@ -98,36 +45,31 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
   void didUpdateWidget(ConsoleScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.output != null && widget.output != oldWidget.output) {
-      _handleNewOutput(widget.output!);
-      if (_autoScroll) {
-        _scrollToBottom();
-      }
+      Future(() {
+        if (mounted) {
+          ref.read(consoleProvider(widget.serverId).notifier).addMessage(widget.output!);
+          if (_autoScroll) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+          }
+        }
+      });
     }
   }
 
-  void _handleNewOutput(String output) {
-    setState(() {
-      if (_messages.isNotEmpty &&
-          output == _messages.last.text &&
-          DateTime.now().difference(_messages.last.timestamp).inSeconds <= 1) {
-        _messages.last.count++;
-      } else {
-        _messages.add(ConsoleMessage.fromString(output));
-      }
+  Future<List<FileSystemEntity>> _getLogFiles() async {
+    final logDir = Directory('${widget.serverPath}/logs');
+    if (!await logDir.exists()) {
+      return [];
+    }
 
-      if (_autoScroll) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-      }
+    final files = await logDir.list().where((entity) =>
+        entity.path.endsWith('.log')).toList();
+
+    files.sort((a, b) {
+      return b.statSync().modified.compareTo(a.statSync().modified);
     });
-  }
 
-  @override
-  void dispose() {
-    _commandController.dispose();
-    _searchController.dispose();
-    _scrollController.removeListener(_handleScroll);
-    _scrollController.dispose();
-    super.dispose();
+    return files;
   }
 
   void _handleScroll() {
@@ -139,6 +81,9 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
 
     setState(() {
       _showScrollButton = !atBottom;
+      if (atBottom) {
+        _autoScroll = true;
+      }
     });
   }
 
@@ -157,211 +102,246 @@ class _ConsoleScreenState extends ConsumerState<ConsoleScreen> {
     if (command.isEmpty) return;
 
     widget.onSendCommand(command);
-
-    setState(() {
-      if (_messages.isNotEmpty &&
-          _messages.last.text == '> $command' &&
-          DateTime.now().difference(_messages.last.timestamp).inSeconds <= 1) {
-        _messages.last.count++;
-      } else {
-        _messages.add(ConsoleMessage(
-          text: '> $command',
-          type: LogType.command,
-          timestamp: DateTime.now(),
-        ));
-      }
-    });
+    final consoleNotifier = ref.read(consoleProvider(widget.serverId).notifier);
+    consoleNotifier.addMessage('> $command');
 
     _commandController.clear();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    _scrollToBottom();
   }
 
-  void _toggleFilter(LogType type) {
-    setState(() {
-      if (_activeFilters.contains(type)) {
-        _activeFilters.remove(type);
-      } else {
-        _activeFilters.add(type);
-      }
+  void _copyConsoleContent() {
+    final consoleState = ref.read(consoleProvider(widget.serverId));
+    final textToCopy = consoleState.messages.join('\n');
+
+    Clipboard.setData(ClipboardData(text: textToCopy)).then((_) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      final snackBar = SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 8),
+            Text('Console content copied to clipboard'),
+          ],
+        ),
+        backgroundColor: AppTheme.primaryGreen,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          bottom: 20,
+          right: 20,
+          left: MediaQuery.of(context).size.width * 0.5,
+        ),
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
     });
-  }
-
-  List<ConsoleMessage> _getFilteredMessages() {
-    return _messages.where((msg) {
-      final matchesSearch =
-      msg.text.toLowerCase().contains(_searchTerm.toLowerCase());
-      final matchesFilter = _activeFilters.contains(msg.type);
-      return matchesSearch && matchesFilter;
-    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final filteredMessages = _getFilteredMessages();
+    final consoleState = ref.watch(consoleProvider(widget.serverId));
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header with search and filters
-        Row(
-          children: [
-            const Text(
-              'Console',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Search Box
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search logs...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchTerm.isNotEmpty
-                      ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _searchTerm = '');
-                    },
-                  )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+        Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: FutureBuilder<List<FileSystemEntity>>(
+            future: _getLogFiles(),
+            builder: (context, snapshot) {
+              return Theme(
+                data: Theme.of(context).copyWith(
+                  iconTheme: IconThemeData(
+                    color: Theme.of(context).colorScheme.secondary,
                   ),
                 ),
-                onChanged: (value) => setState(() => _searchTerm = value),
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Filter Chips
-            for (final type in LogType.values)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(type.name.toUpperCase()),
-                  selected: _activeFilters.contains(type),
-                  onSelected: (_) => _toggleFilter(type),
-                  backgroundColor: Theme.of(context).chipTheme.backgroundColor,
-                  selectedColor: AppTheme.primaryGreen.withOpacity(0.2),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        // Console output
-        Expanded(
-          child: Stack(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Scrollbar(
-                  controller: _scrollController,
-                  thumbVisibility: true,
-                  radius: const Radius.circular(4),
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredMessages.length,
-                    itemBuilder: (context, index) {
-                      final message = filteredMessages[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              message.formattedTime,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.secondary,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: RichText(
-                                text: TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: message.text,
-                                      style: TextStyle(
-                                        color: message.getColor(context),
-                                        fontFamily: 'monospace',
-                                      ),
-                                    ),
-                                    if (message.count > 1)
-                                      TextSpan(
-                                        text: ' (×${message.count})',
-                                        style: TextStyle(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .secondary,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                child: ExpansionTile(
+                  key: GlobalKey(),
+                  title: Text(consoleState.selectedLogLabel),
+                  shape: const RoundedRectangleBorder(
+                    side: BorderSide.none,
                   ),
-                ),
-              ),
-              if (_showScrollButton)
-                Positioned(
-                  right: 16,
-                  bottom: 16,
-                  child: FloatingActionButton(
-                    mini: true,
-                    onPressed: () {
-                      setState(() {
-                        _autoScroll = true;
-                      });
-                      _scrollToBottom();
-                    },
-                    tooltip: 'Scroll to bottom',
-                    backgroundColor: Theme.of(context).primaryColor,
-                    child: const Icon(Icons.keyboard_arrow_down),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.copy),
+                        onPressed: _copyConsoleContent,
+                        tooltip: 'Copy to clipboard',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () {
+                          ref.read(consoleProvider(widget.serverId).notifier).clearMessages();
+                        },
+                        tooltip: 'Clear',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        onPressed: () {
+                          if (consoleState.currentLogEntity != null) {
+                            ref.read(consoleProvider(widget.serverId).notifier)
+                                .loadLogFile(consoleState.currentLogEntity!);
+                          }
+                        },
+                        tooltip: 'Refresh',
+                      ),
+                      const Icon(Icons.expand_more),
+                    ],
                   ),
+                  children: [
+                    ListTile(
+                      title: const Text('Live Console'),
+                      selected: consoleState.currentLogFile.isEmpty,
+                      onTap: () {
+                        ref.read(consoleProvider(widget.serverId).notifier)
+                            .switchToLiveConsole();
+                        Future.delayed(const Duration(milliseconds: 100), () {
+                          setState(() {});
+                        });
+                      },
+                    ),
+                    if (snapshot.hasData)
+                      ...snapshot.data!.map((file) => ListTile(
+                        title: Text(_getLogFileName(file)),
+                        selected: consoleState.currentLogFile == file.path,
+                        onTap: () {
+                          ref.read(consoleProvider(widget.serverId).notifier)
+                              .loadLogFile(file);
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            setState(() {});
+                          });
+                        },
+                      )),
+                  ],
                 ),
-            ],
+              );
+            },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
 
-        // Command input
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _commandController,
-                decoration: const InputDecoration(
-                  hintText: 'Enter command...',
-                  prefixText: '> ',
-                ),
-                onSubmitted: (_) => _sendCommand(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _sendCommand,
-              child: const Text('Send'),
-            ),
-          ],
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: 'Search logs...',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _searchTerm.isNotEmpty
+                ? IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: () {
+                _searchController.clear();
+                setState(() => _searchTerm = '');
+              },
+            )
+                : null,
+          ),
+          onChanged: (value) => setState(() => _searchTerm = value),
         ),
+        const SizedBox(height: 8),
+
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Stack(
+              children: [
+                ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: consoleState.messages.length,
+                  itemBuilder: (context, index) {
+                    final message = consoleState.messages[index];
+                    if (!message.toLowerCase().contains(_searchTerm.toLowerCase())) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: SelectableText(
+                        message,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          color: Colors.white,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                if (_showScrollButton)
+                  Positioned(
+                    right: 16,
+                    bottom: 16,
+                    child: FloatingActionButton(
+                      mini: true,
+                      onPressed: () {
+                        setState(() => _autoScroll = true);
+                        _scrollToBottom();
+                      },
+                      tooltip: 'Scroll to bottom',
+                      child: const Icon(Icons.keyboard_arrow_down),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+
+        if (consoleState.currentLogFile.isEmpty) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _commandController,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter command...',
+                    prefixText: '> ',
+                  ),
+                  onSubmitted: (_) => _sendCommand(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _sendCommand,
+                child: const Text('Send'),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
+
+  String _getLogFileName(FileSystemEntity entity) {
+    final path = entity.path;
+    final name = path.split(Platform.pathSeparator).last;
+
+    if (name == 'latest.log') {
+      return name;
+    }
+
+    final date = File(path).statSync().modified;
+    return '${name.split('.').first} - ${_formatDate(date)}';
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  void dispose() {
+    _commandController.dispose();
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 }
+
