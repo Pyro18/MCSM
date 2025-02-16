@@ -37,6 +37,8 @@ class JavaRepositoryImpl implements IJavaRepository {
   Future<List<JavaInstallation>> loadJavaInstallations() =>
       _javaService.loadJavaInstallations();
 
+
+
   @override
   Future<void> setDefaultJavaInstallation(String path) async {
     final installations = await loadJavaInstallations();
@@ -55,5 +57,23 @@ class JavaRepositoryImpl implements IJavaRepository {
     final installations = await loadJavaInstallations();
     installations.removeWhere((inst) => inst.path == path);
     await saveJavaInstallations(installations);
+  }
+
+  @override
+  Future<JavaInstallation?> selectAndValidateJavaPath(String path) async {
+    try {
+      final version = await _javaService.validateAndGetVersion(path);
+      if (version != null) {
+        return JavaInstallation(
+          path: path,
+          version: version,
+          isDefault: false,
+        );
+      }
+      return null;
+    } catch (e) {
+      print('Error validating Java path: $e');
+      return null;
+    }
   }
 }

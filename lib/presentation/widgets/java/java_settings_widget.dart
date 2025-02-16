@@ -4,17 +4,34 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/entities/java_installation.dart';
 import '../../providers/java/java_provider.dart';
+import '../../providers/settings/settings_provider.dart';
 
-class JavaSettingsWidget extends ConsumerWidget {
+class JavaSettingsWidget extends ConsumerStatefulWidget {
   const JavaSettingsWidget({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<JavaSettingsWidget> createState() => _JavaSettingsWidgetState();
+}
+
+class _JavaSettingsWidgetState extends ConsumerState<JavaSettingsWidget> {
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(settingsProvider.notifier).autoDetectJava();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final installationsAsync = ref.watch(javaInstallationsProvider);
+    final settingsAsync = ref.watch(settingsProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Header con azioni
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -25,25 +42,94 @@ class JavaSettingsWidget extends ConsumerWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            TextButton.icon(
-              icon: const Icon(Icons.refresh),
-              label: const Text('Rescan'),
-              onPressed: () {
-                ref.invalidate(javaInstallationsProvider);
-              },
+            Row(
+              children: [
+                // Auto-detect button
+                TextButton.icon(
+                  icon: const Icon(Icons.search),
+                  label: const Text('Auto Detect'),
+                  onPressed: () async {
+                    try {
+                      await ref
+                          .read(settingsProvider.notifier)
+                          .autoDetectJava();
+                      ref.invalidate(javaInstallationsProvider);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Java detected successfully'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error detecting Java: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
+                // Rescan button
+                TextButton.icon(
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Rescan'),
+                  onPressed: () {
+                    ref.invalidate(javaInstallationsProvider);
+                  },
+                ),
+              ],
             ),
           ],
         ),
         const SizedBox(height: 16),
+
+        // Lista delle installazioni
         installationsAsync.when(
           data: (installations) => installations.isEmpty
-              ? const Center(
-                  child: Text('No Java installations found'),
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('No Java installations found'),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () async {
+                          try {
+                            await ref
+                                .read(settingsProvider.notifier)
+                                .autoDetectJava();
+                            ref.invalidate(javaInstallationsProvider);
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error detecting Java: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text('Try Auto Detect'),
+                      ),
+                    ],
+                  ),
                 )
               : Column(
                   children: [
                     ...installations.map((inst) => _JavaInstallationTile(
                           installation: inst,
+                          isCurrentPath: settingsAsync.whenOrNull(
+                                data: (settings) =>
+                                    settings.javaPath == inst.path,
+                              ) ??
+                              false,
                         )),
                   ],
                 ),
@@ -51,10 +137,24 @@ class JavaSettingsWidget extends ConsumerWidget {
             child: CircularProgressIndicator(),
           ),
           error: (error, stack) => Center(
-            child: Text('Error: $error'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Error: $error'),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    ref.invalidate(javaInstallationsProvider);
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 16),
+
+        // Add manually button
         OutlinedButton.icon(
           icon: const Icon(Icons.add),
           label: const Text('Add Java Installation'),
@@ -63,8 +163,10 @@ class JavaSettingsWidget extends ConsumerWidget {
       ],
     );
   }
+}
 
-  Future<void> _addJavaInstallation(BuildContext context, WidgetRef ref) async {
+Future<void> _addJavaInstallation(BuildContext context, WidgetRef ref) async {
+  try {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['exe'],
@@ -77,34 +179,88 @@ class JavaSettingsWidget extends ConsumerWidget {
       final path = result.files.single.path!;
 
       if (!installations.any((inst) => inst.path == path)) {
-        final newInstallations = [
-          ...installations,
-          JavaInstallation(
-            path: path,
-            version:
-                'Custom Installation', // This will be updated by the service
-          ),
-        ];
+        // Verifica che il file sia un eseguibile Java valido
+        final version = await service.validateAndGetVersion(path);
+        if (version != null) {
+          final newInstallations = [
+            ...installations,
+            JavaInstallation(
+              path: path,
+              version: version,
+              isDefault: installations.isEmpty,
+            ),
+          ];
 
-        await service.saveJavaInstallations(newInstallations);
-        ref.invalidate(javaInstallationsProvider);
+          await service.saveJavaInstallations(newInstallations);
+          ref.invalidate(javaInstallationsProvider);
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Java installation added successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Invalid Java executable'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('This Java installation is already added'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error adding Java installation: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }
 
 class _JavaInstallationTile extends ConsumerWidget {
   final JavaInstallation installation;
+  final bool isCurrentPath;
 
   const _JavaInstallationTile({
     required this.installation,
+    required this.isCurrentPath,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       child: ListTile(
-        title: Text('Java ${installation.version}'),
+        title: Row(
+          children: [
+            Text('Java ${installation.version}'),
+            if (isCurrentPath) ...[
+              const SizedBox(width: 8),
+              const Chip(
+                label: Text('Current'),
+                backgroundColor: Colors.green,
+                labelStyle: TextStyle(color: Colors.white),
+              ),
+            ],
+          ],
+        ),
         subtitle: Text(installation.path),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -121,40 +277,76 @@ class _JavaInstallationTile extends ConsumerWidget {
               TextButton(
                 child: const Text('Set as Default'),
                 onPressed: () async {
-                  final service = ref.read(javaServiceProvider);
-                  final installations = await service.loadJavaInstallations();
+                  try {
+                    final service = ref.read(javaServiceProvider);
+                    final installations = await service.loadJavaInstallations();
 
-                  final updatedInstallations = installations.map((inst) {
-                    if (inst.path == installation.path) {
+                    final updatedInstallations = installations.map((inst) {
                       return JavaInstallation(
                         path: inst.path,
                         version: inst.version,
-                        isDefault: true,
+                        isDefault: inst.path == installation.path,
+                      );
+                    }).toList();
+
+                    await service.saveJavaInstallations(updatedInstallations);
+
+                    // Update settings to use this Java path
+                    final settings = await ref.read(settingsProvider.future);
+                    await ref.read(settingsProvider.notifier).updateSettings(
+                          settings.copyWith(javaPath: installation.path),
+                        );
+
+                    ref.invalidate(javaInstallationsProvider);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content:
+                              Text('Error setting default installation: $e'),
+                          backgroundColor: Colors.red,
+                        ),
                       );
                     }
-                    return JavaInstallation(
-                      path: inst.path,
-                      version: inst.version,
-                      isDefault: false,
-                    );
-                  }).toList();
-
-                  await service.saveJavaInstallations(updatedInstallations);
-                  ref.invalidate(javaInstallationsProvider);
+                  }
                 },
               ),
             IconButton(
               icon: const Icon(Icons.delete),
               onPressed: () async {
-                final service = ref.read(javaServiceProvider);
-                final installations = await service.loadJavaInstallations();
+                try {
+                  final service = ref.read(javaServiceProvider);
+                  final installations = await service.loadJavaInstallations();
 
-                final updatedInstallations = installations
-                    .where((inst) => inst.path != installation.path)
-                    .toList();
+                  if (installations.length == 1) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Cannot remove the last Java installation'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                    }
+                    return;
+                  }
 
-                await service.saveJavaInstallations(updatedInstallations);
-                ref.invalidate(javaInstallationsProvider);
+                  final updatedInstallations = installations
+                      .where((inst) => inst.path != installation.path)
+                      .toList();
+
+                  await service.saveJavaInstallations(updatedInstallations);
+                  ref.invalidate(javaInstallationsProvider);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error removing installation: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
             ),
           ],

@@ -53,25 +53,30 @@ class Settings {
     );
   }
 
-  Map<String, dynamic> toJson() =>
-      {
-        'serverPath': serverPath,
-        'javaPath': javaPath,
-        'startMinimized': startMinimized,
-        'closeToTray': closeToTray,
-        'autoUpdate': autoUpdate,
-        'backup': backupSettings.toJson(),
-      };
+  Map<String, dynamic> toJson() {
+    final json = {
+      'serverPath': serverPath,
+      'javaPath': javaPath,
+      'startMinimized': startMinimized,
+      'closeToTray': closeToTray,
+      'autoUpdate': autoUpdate,
+      'backup': backupSettings.toJson(),
+    };
+    print('Converting Settings to JSON. Java path: ${json['javaPath']}');
+    return json;
+  }
 
-  factory Settings.fromJson(Map<String, dynamic> json) =>
-      Settings(
-        serverPath: json['serverPath'] ?? defaultServerPath,
-        javaPath: json['javaPath'] ?? '',
-        startMinimized: json['startMinimized'] ?? false,
-        closeToTray: json['closeToTray'] ?? true,
-        autoUpdate: json['autoUpdate'] ?? true,
-        backupSettings: BackupSettings.fromJson(json['backup'] ?? {}),
-      );
+  factory Settings.fromJson(Map<String, dynamic> json) {
+    print('Creating Settings from JSON. Java path: ${json['javaPath']}');
+    return Settings(
+      serverPath: json['serverPath'] ?? defaultServerPath,
+      javaPath: json['javaPath'] ?? '',
+      startMinimized: json['startMinimized'] ?? false,
+      closeToTray: json['closeToTray'] ?? true,
+      autoUpdate: json['autoUpdate'] ?? true,
+      backupSettings: BackupSettings.fromJson(json['backup'] ?? {}),
+    );
+  }
 }
 
 class BackupSettings {

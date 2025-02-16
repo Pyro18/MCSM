@@ -54,7 +54,7 @@ class ServersScreen extends ConsumerWidget {
                     builder: (_) => const CreateServerDialog(),
                   );
                 },
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add, color: Colors.white),
                 label: const Text('New Server'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryGreen,

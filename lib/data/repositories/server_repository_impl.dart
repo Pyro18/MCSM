@@ -1,25 +1,52 @@
-import '../../domain/repositories/server_repository.dart';
 import '../../domain/entities/minecraft_server.dart';
 import '../../domain/entities/server_types.dart';
-import '../datasources/remote/server_process_service.dart';
+import '../../domain/repositories/server_repository.dart';
 import '../datasources/local/app_storage.dart';
 import '../datasources/remote/backup_service.dart';
+import '../datasources/remote/server_process_service.dart';
 
 class ServerRepositoryImpl implements IServerRepository {
   final ServerProcessService _processService;
   final AppStorage _storage;
   final BackupService _backupService;
 
-  ServerRepositoryImpl(this._processService, this._storage, this._backupService);
+  ServerRepositoryImpl(
+      this._processService, this._storage, this._backupService);
 
   @override
-  Future<List<MinecraftServer>> getServers() => _storage.loadServers();
+  Future<List<MinecraftServer>> getServers() async {
+    try {
+      print('Getting servers from storage...');
+      final servers = await _storage.loadServers();
+      print('Loaded ${servers.length} servers from storage');
+      return servers;
+    } catch (e, stack) {
+      print('Error in repository getServers: $e');
+      print('Stack trace: $stack');
+      rethrow;
+    }
+  }
 
   @override
   Future<void> addServer(MinecraftServer server) async {
-    final servers = await getServers();
-    servers.add(server);
-    await _storage.saveServers(servers);
+    try {
+      print('Starting to add server to repository...');
+      final servers = await getServers();
+      print('Current servers count: ${servers.length}');
+
+      servers.add(server);
+      await _storage.saveServers(servers);
+
+      print('Server saved successfully. New count: ${servers.length}');
+
+      final verificationServers = await getServers();
+      print(
+          'Verification - Servers count after save: ${verificationServers.length}');
+    } catch (e, stack) {
+      print('Error in repository addServer: $e');
+      print('Stack trace: $stack');
+      rethrow;
+    }
   }
 
   @override

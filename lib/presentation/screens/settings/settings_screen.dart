@@ -1,20 +1,79 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
+
 import '../../../domain/entities/settings.dart';
 import '../../providers/settings/settings_provider.dart';
-import '../../../data/datasources/remote/java_service.dart';
+import '../../providers/java/java_provider.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
-  Future<void> _selectDirectory(
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+
+  Future<void> _selectJavaPath(
       BuildContext context,
       WidgetRef ref,
       Settings currentSettings,
-      String title,
-      void Function(String) onSelected,
       ) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        dialogTitle: 'Select Java Executable',
+        type: FileType.custom,
+        allowedExtensions: ['exe'],
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final path = result.files.first.path!;
+        final javaRepo = ref.read(javaRepositoryProvider);
+        final installation = await javaRepo.selectAndValidateJavaPath(path);
+
+        if (installation != null) {
+          final newSettings = currentSettings.copyWith(javaPath: installation.path);
+          await ref.read(settingsProvider.notifier).updateSettings(newSettings);
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Java path updated successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Invalid Java executable'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error selecting Java: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _selectDirectory(
+    BuildContext context,
+    WidgetRef ref,
+    Settings currentSettings,
+    String title,
+    void Function(String) onSelected,
+  ) async {
     final result = await FilePicker.platform.getDirectoryPath(
       dialogTitle: title,
     );
@@ -24,72 +83,8 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _selectJavaPath(
-      BuildContext context,
-      WidgetRef ref,
-      Settings currentSettings,
-      ) async {
-    final result = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Select Java Executable',
-      type: FileType.custom,
-      allowedExtensions: ['exe'],
-    );
-
-    if (result != null && result.files.isNotEmpty) {
-      final newSettings = currentSettings.copyWith(
-        javaPath: result.files.first.path!,
-      );
-      await ref.read(settingsProvider.notifier).updateSettings(newSettings);
-    }
-  }
-
-  Future<void> _detectJavaPath(
-      BuildContext context,
-      WidgetRef ref,
-      Settings currentSettings,
-      ) async {
-    try {
-      final javaService = JavaService();
-      final installations = await javaService.detectJavaInstallations();
-
-      if (installations.isNotEmpty) {
-        final newSettings = currentSettings.copyWith(
-          javaPath: installations.first.path,
-        );
-        await ref.read(settingsProvider.notifier).updateSettings(newSettings);
-
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Java installation found successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No Java installation found'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error detecting Java: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final settingsAsync = ref.watch(settingsProvider);
 
     return Padding(
@@ -125,23 +120,31 @@ class SettingsScreen extends ConsumerWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: TextFormField(
-                            decoration: const InputDecoration(
-                              labelText: 'Java Path',
-                            ),
-                            readOnly: true,
-                            controller: TextEditingController(text: settings.javaPath),
+                            child: TextFormField(
+                          decoration: const InputDecoration(
+                            labelText: 'Java Path',
                           ),
-                        ),
+                          readOnly: true,
+                          controller: TextEditingController(
+                            text: settingsAsync.when(
+                              data: (settings) => settings.javaPath,
+                              loading: () => 'Loading...',
+                              error: (_, __) => 'Error loading Java path',
+                            ),
+                          ),
+                        )),
                         const SizedBox(width: 8),
                         IconButton(
-                          onPressed: () => _selectJavaPath(context, ref, settings),
+                          onPressed: () =>
+                              _selectJavaPath(context, ref, settings),
                           icon: const Icon(Icons.folder_open),
                           tooltip: 'Select Java Path',
                         ),
                         IconButton(
                           onPressed: () async {
-                            await _detectJavaPath(context, ref, settings);
+                            await ref
+                                .read(settingsProvider.notifier)
+                                .autoDetectJava();
                           },
                           icon: const Icon(Icons.refresh),
                           tooltip: 'Auto Detect Java',
@@ -167,7 +170,8 @@ class SettingsScreen extends ConsumerWidget {
                               labelText: 'Default Server Location',
                             ),
                             readOnly: true,
-                            controller: TextEditingController(text: settings.serverPath),
+                            controller: TextEditingController(
+                                text: settings.serverPath),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -177,9 +181,11 @@ class SettingsScreen extends ConsumerWidget {
                             ref,
                             settings,
                             'Select Server Location',
-                                (path) async {
-                              final newSettings = settings.copyWith(serverPath: path);
-                              await ref.read(settingsProvider.notifier)
+                            (path) async {
+                              final newSettings =
+                                  settings.copyWith(serverPath: path);
+                              await ref
+                                  .read(settingsProvider.notifier)
                                   .updateSettings(newSettings);
                             },
                           ),
@@ -191,7 +197,8 @@ class SettingsScreen extends ConsumerWidget {
                             final newSettings = settings.copyWith(
                               serverPath: Settings.defaultServerPath,
                             );
-                            await ref.read(settingsProvider.notifier)
+                            await ref
+                                .read(settingsProvider.notifier)
                                 .updateSettings(newSettings);
                           },
                           icon: const Icon(Icons.refresh),
@@ -212,31 +219,40 @@ class SettingsScreen extends ConsumerWidget {
                     const SizedBox(height: 16),
                     SwitchListTile(
                       title: const Text('Start Minimized'),
-                      subtitle: const Text('Start the application minimized to system tray'),
+                      subtitle: const Text(
+                          'Start the application minimized to system tray'),
                       value: settings.startMinimized,
                       onChanged: (value) async {
-                        final newSettings = settings.copyWith(startMinimized: value);
-                        await ref.read(settingsProvider.notifier)
+                        final newSettings =
+                            settings.copyWith(startMinimized: value);
+                        await ref
+                            .read(settingsProvider.notifier)
                             .updateSettings(newSettings);
                       },
                     ),
                     SwitchListTile(
                       title: const Text('Close to Tray'),
-                      subtitle: const Text('Minimize to system tray when closing the window'),
+                      subtitle: const Text(
+                          'Minimize to system tray when closing the window'),
                       value: settings.closeToTray,
                       onChanged: (value) async {
-                        final newSettings = settings.copyWith(closeToTray: value);
-                        await ref.read(settingsProvider.notifier)
+                        final newSettings =
+                            settings.copyWith(closeToTray: value);
+                        await ref
+                            .read(settingsProvider.notifier)
                             .updateSettings(newSettings);
                       },
                     ),
                     SwitchListTile(
                       title: const Text('Automatic Updates'),
-                      subtitle: const Text('Automatically check for application updates'),
+                      subtitle: const Text(
+                          'Automatically check for application updates'),
                       value: settings.autoUpdate,
                       onChanged: (value) async {
-                        final newSettings = settings.copyWith(autoUpdate: value);
-                        await ref.read(settingsProvider.notifier)
+                        final newSettings =
+                            settings.copyWith(autoUpdate: value);
+                        await ref
+                            .read(settingsProvider.notifier)
                             .updateSettings(newSettings);
                       },
                     ),
@@ -271,13 +287,14 @@ class SettingsScreen extends ConsumerWidget {
                             ref,
                             settings,
                             'Select Backup Location',
-                                (path) async {
+                            (path) async {
                               final newBackupSettings = settings.backupSettings
                                   .copyWith(backupPath: path);
                               final newSettings = settings.copyWith(
                                 backupSettings: newBackupSettings,
                               );
-                              await ref.read(settingsProvider.notifier)
+                              await ref
+                                  .read(settingsProvider.notifier)
                                   .updateSettings(newSettings);
                             },
                           ),
@@ -292,12 +309,13 @@ class SettingsScreen extends ConsumerWidget {
                       subtitle: const Text('Enable automatic server backups'),
                       value: settings.backupSettings.autoBackup,
                       onChanged: (value) async {
-                        final newBackupSettings = settings.backupSettings
-                            .copyWith(autoBackup: value);
+                        final newBackupSettings =
+                            settings.backupSettings.copyWith(autoBackup: value);
                         final newSettings = settings.copyWith(
                           backupSettings: newBackupSettings,
                         );
-                        await ref.read(settingsProvider.notifier)
+                        await ref
+                            .read(settingsProvider.notifier)
                             .updateSettings(newSettings);
                       },
                     ),
@@ -312,16 +330,18 @@ class SettingsScreen extends ConsumerWidget {
                               ),
                               keyboardType: TextInputType.number,
                               initialValue:
-                              settings.backupSettings.frequency.toString(),
+                                  settings.backupSettings.frequency.toString(),
                               onChanged: (value) async {
                                 final frequency = int.tryParse(value);
                                 if (frequency != null) {
-                                  final newBackupSettings = settings.backupSettings
+                                  final newBackupSettings = settings
+                                      .backupSettings
                                       .copyWith(frequency: frequency);
                                   final newSettings = settings.copyWith(
                                     backupSettings: newBackupSettings,
                                   );
-                                  await ref.read(settingsProvider.notifier)
+                                  await ref
+                                      .read(settingsProvider.notifier)
                                       .updateSettings(newSettings);
                                 }
                               },
@@ -336,16 +356,18 @@ class SettingsScreen extends ConsumerWidget {
                               ),
                               keyboardType: TextInputType.number,
                               initialValue:
-                              settings.backupSettings.maxBackups.toString(),
+                                  settings.backupSettings.maxBackups.toString(),
                               onChanged: (value) async {
                                 final maxBackups = int.tryParse(value);
                                 if (maxBackups != null) {
-                                  final newBackupSettings = settings.backupSettings
+                                  final newBackupSettings = settings
+                                      .backupSettings
                                       .copyWith(maxBackups: maxBackups);
                                   final newSettings = settings.copyWith(
                                     backupSettings: newBackupSettings,
                                   );
-                                  await ref.read(settingsProvider.notifier)
+                                  await ref
+                                      .read(settingsProvider.notifier)
                                       .updateSettings(newSettings);
                                 }
                               },

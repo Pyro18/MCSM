@@ -1,31 +1,32 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../domain/entities/java_installation.dart';
 import '../../../data/datasources/remote/java_service.dart';
+import '../../../data/repositories/java_repository_impl.dart';
+import '../../../domain/entities/java_installation.dart';
+import '../../../domain/repositories/java_repository.dart';
 
 final javaServiceProvider = Provider((ref) => JavaService());
 
 final javaInstallationsProvider =
-    FutureProvider<List<JavaInstallation>>((ref) async {
-  final service = ref.read(javaServiceProvider);
+FutureProvider<List<JavaInstallation>>((ref) async {
+  final service = ref.watch(javaServiceProvider);
 
-  // First try to load saved installations
   final savedInstallations = await service.loadJavaInstallations();
   if (savedInstallations.isNotEmpty) {
     return savedInstallations;
   }
 
-  // If no saved installations, detect them
   final installations = await service.detectJavaInstallations();
 
-  // Save the detected installations
-  await service.saveJavaInstallations(installations);
+  if (installations.isNotEmpty) {
+    await service.saveJavaInstallations(installations);
+  }
 
   return installations;
 });
 
 final defaultJavaInstallationProvider =
-    Provider<AsyncValue<JavaInstallation>>((ref) {
+Provider<AsyncValue<JavaInstallation>>((ref) {
   final installations = ref.watch(javaInstallationsProvider);
 
   return installations.when(
@@ -33,7 +34,7 @@ final defaultJavaInstallationProvider =
       try {
         return AsyncValue.data(
           list.firstWhere(
-            (inst) => inst.isDefault,
+                (inst) => inst.isDefault,
             orElse: () => list.first,
           ),
         );
@@ -47,4 +48,9 @@ final defaultJavaInstallationProvider =
     loading: () => const AsyncValue.loading(),
     error: (error, stack) => AsyncValue.error(error, stack),
   );
+});
+
+final javaRepositoryProvider = Provider<IJavaRepository>((ref) {
+  final service = ref.watch(javaServiceProvider);
+  return JavaRepositoryImpl(service);
 });

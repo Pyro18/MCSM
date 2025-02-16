@@ -14,4 +14,6 @@ abstract class IJavaRepository {
   Future<void> setDefaultJavaInstallation(String path);
 
   Future<void> removeJavaInstallation(String path);
+
+  Future<JavaInstallation?> selectAndValidateJavaPath(String path);
 }

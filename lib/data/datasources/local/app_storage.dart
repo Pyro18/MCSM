@@ -51,13 +51,12 @@ class AppStorage {
 
   Future<void> saveServers(List<MinecraftServer> servers) async {
     try {
-      print('Attempting to save ${servers.length} servers');
-      final json = {
-        'servers': servers.map((s) => s.toJson()).toList(),
-        'schemaVersion': '1.0.0'
-      };
-      await _storage.atomicWrite(StorageConfig.serversPath, json);
-      print('Successfully saved servers to: ${StorageConfig.serversPath}');
+      print('Saving ${servers.length} servers to storage');
+      await _storage.atomicWrite(
+        StorageConfig.serversPath,
+        {'servers': servers.map((s) => s.toJson()).toList()},
+      );
+      print('Servers saved successfully');
 
       final savedContent = await _storage.atomicRead(StorageConfig.serversPath);
       print('Verification - Saved content: $savedContent');

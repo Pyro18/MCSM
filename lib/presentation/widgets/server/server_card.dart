@@ -32,6 +32,7 @@ class ServerCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final statusAsync = ref.watch(serverStatusProvider(server.id));
     final service = ref.read(serverProcessServiceProvider);
+    final status = statusAsync.valueOrNull ?? ServerStatus.stopped;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -107,64 +108,49 @@ class ServerCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  // Action Buttons
-                  statusAsync.when(
-                    data: (status) => Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            status == ServerStatus.running
-                                ? Icons.stop
-                                : Icons.play_arrow,
-                            color: AppTheme.primaryGreen,
-                          ),
-                          onPressed: status == ServerStatus.running
-                              ? () => service.stopServer(server.id)
-                              : () => service.startServer(server),
+                  // Action Buttons - Always show them
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          status == ServerStatus.running
+                              ? Icons.stop
+                              : Icons.play_arrow,
+                          color: AppTheme.primaryGreen,
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.settings),
-                          onPressed: () {},
-                        ),
-                      ],
-                    ),
-                    loading: () => const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    error: (_, __) => const Icon(Icons.error, color: Colors.red),
+                        onPressed: status == ServerStatus.running
+                            ? () => service.stopServer(server.id)
+                            : () => service.startServer(server),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings),
+                        onPressed: () {},
+                      ),
+                    ],
                   ),
                 ],
               ),
               const Spacer(),
               // Status indicator
-              statusAsync.when(
-                data: (status) => Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(status),
-                        shape: BoxShape.circle,
-                      ),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(status),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      status.displayName,
-                      style: TextStyle(
-                        color: _getStatusColor(status),
-                        fontSize: 14,
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    status.displayName,
+                    style: TextStyle(
+                      color: _getStatusColor(status),
+                      fontSize: 14,
                     ),
-                  ],
-                ),
-                loading: () => const Text('Loading...'),
-                error: (_, __) => const Text(
-                  'Error',
-                  style: TextStyle(color: Colors.red),
-                ),
+                  ),
+                ],
               ),
             ],
           ),

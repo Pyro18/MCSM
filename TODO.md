@@ -1,12 +1,12 @@
 # MCSM Project TODO List
-
 ## Core Features
-
 ### Java Management
 - [x] Implementare l'auto-detection di Java nelle impostazioni
 - [x] Aggiungere la validazione del percorso Java
 - [x] Salvare il percorso Java nelle impostazioni
 - [x] Aggiungere supporto per multiple versioni di Java
+- [x] Gestione delle versioni Java per server specifici
+- [ ] Aggiungere suggerimenti per versioni Java compatibili per ogni versione di Minecraft
 
 ### Server Creation & Management
 - [x] Implementare una progress bar durante il download del server
@@ -14,78 +14,103 @@
 - [x] Implementare il sistema di aggiunta automatica dei server alla homepage
 - [x] Aggiungere la validazione dei campi nel form di creazione
 - [x] Implementare il sistema di gestione delle versioni dei server
+- [x] Implementare sistema di rotazione dei backup
 - [ ] Ottimizzazione della memoria per i server a lungo termine
+- [ ] Implementare duplicazione server
+- [ ] Aggiungere sistema di import/export server
+- [ ] Implementare gestione whitelist/blacklist
+- [ ] Aggiungere gestione delle mod per server Forge/Fabric
+- [x] Implementare gestione EULA automatica
+- [x] Aggiungere system tray support
 
 ### UI/UX Improvements
 - [x] Aggiungere spazi corretti nel layout delle impostazioni
+- [x] Implementare tema scuro
+- [x] Aggiungere effetti confetti per nuovi server
 - [ ] Migliorare il responsive design
 - [ ] Aggiungere animazioni di transizione
-- [ ] Implementare temi chiari/scuri
+- [ ] Implementare tema chiaro
 - [ ] Aggiungere tooltips per le funzionalità
+- [ ] Implementare drag and drop per file di configurazione
+- [ ] Aggiungere personalizzazione colori server
+- [ ] Migliorare la UI delle statistiche server
 
 ### Data Management
-- [x] Decidere e implementare il sistema di storage (SQLite vs JSON)
+- [x] Decidere e implementare il sistema di storage (JSON)
 - [x] Implementare il sistema di backup delle configurazioni
 - [x] Creare schema per i dati dei server
-- [ ] Aggiungere sistema di migrazione dei dati
 - [x] Implementare sistema di validazione dei dati
+- [x] Implementare storage atomico per la sicurezza dei dati
+- [ ] Aggiungere sistema di migrazione dei dati
+- [ ] Implementare compressione dei backup
+- [ ] Aggiungere export/import delle configurazioni
+- [ ] Implementare pulizia automatica dei log vecchi
 
-### Internationalization
-- [ ] Implementare sistema i18n
-- [ ] Aggiungere supporto per lingue multiple
-- [ ] Creare file di traduzione per:
-  - [ ] Italiano
-  - [ ] Inglese
-  - [ ] Altre lingue prioritarie
-
-### Application Info
-- [ ] Aggiungere schermata About con:
-  - [ ] Informazioni sulla versione
-  - [ ] Credits degli sviluppatori
-  - [ ] Link alla pagina GitHub
-  - [ ] Changelog
-- [ ] Implementare sistema di controllo aggiornamenti
-
-### La gestione dell'output della console necessita di ulteriori miglioramenti:
+### Console Management
 - [x] Migliore analisi e formattazione dei log
 - [x] Gestione della posizione di scorrimento
 - [x] Funzionalità di ricerca/filtraggio dei log
 - [x] Correggere lo spam della console
+- [x] Implementare colorazione sintassi log
+- [ ] Aggiungere log viewer separato per file di log
+- [ ] Implementare auto-completamento comandi
+- [ ] Aggiungere comandi rapidi personalizzabili
+- [ ] Implementare macro per comandi frequenti
 
-## Additional Features
+### Server Monitoring
+- [x] Monitoraggio stato server (running/stopped)
+- [x] Tracking tempo di gioco
+- [ ] Implementare grafici per:
+  - [ ] Utilizzo CPU
+  - [ ] Utilizzo memoria
+  - [ ] Giocatori online
+  - [ ] TPS (Ticks Per Second)
+- [ ] Aggiungere sistema di alert per:
+  - [ ] Crash server
+  - [ ] Alto utilizzo risorse
+  - [ ] Attività sospette
+  - [ ] Backup falliti
 
-### Server Management
-- [ ] Implementare sistema di backup automatico
-- [ ] Aggiungere gestione plugins
-- [ ] Implementare sistema di logs
-- [ ] Aggiungere monitoraggio risorse
+### Additional Features
+- [x] Implementare sistema di backup automatico
+- [x] Aggiungere gestione configurazioni
+- [ ] Implementare sistema di plugin
+- [ ] Aggiungere supporto per:
+  - [ ] Server Forge
+  - [ ] Server Fabric
+  - [ ] Server Spigot
 - [ ] Implementare sistema di notifiche
+- [ ] Aggiungere supporto multi-lingua
+- [ ] Implementare updater automatico
+- [ ] Aggiungere sistema di crash report
 
 ### Security
-- [ ] Implementare sistema di autenticazione per operazioni sensibili
+- [x] Implementare backup sicuro con rotazione
 - [ ] Aggiungere validazione dei file scaricati
 - [ ] Implementare controlli di sicurezza per i comandi
 - [ ] Aggiungere sistema di permessi
-
-### Performance
-- [ ] Ottimizzare il caricamento delle risorse
-- [ ] Implementare lazy loading dei componenti
-- [ ] Aggiungere caching dei dati
-- [ ] Ottimizzare le operazioni di I/O
-
-### Settings
-- [ ] Aggiungere un sistema di modifica dei settings direttamente dal software 
-      (usare vscode come estensione o un blocco note custom)
+- [ ] Implementare logging delle azioni sensibili
+- [ ] Aggiungere controllo integrità file server
 
 ### Testing
-- [ ] Aggiungere unit tests
+- [ ] Aggiungere unit tests per:
+  - [ ] Server management
+  - [ ] Backup system
+  - [ ] Settings management
+  - [ ] Java detection
 - [ ] Implementare integration tests
 - [ ] Aggiungere E2E tests
 - [ ] Creare test automatizzati per il CI/CD
 
 ## Documentation
-- [ ] Creare documentazione per gli utenti
-- [ ] Aggiungere documentazione per gli sviluppatori
+- [ ] Creare documentazione per gli utenti:
+  - [ ] Guida installazione
+  - [ ] Manuale utilizzo
+  - [ ] Troubleshooting
+- [ ] Aggiungere documentazione per gli sviluppatori:
+  - [ ] Setup ambiente
+  - [ ] Architettura
+  - [ ] API reference
 - [ ] Creare wiki con guide e tutorial
 - [ ] Aggiungere commenti al codice
 - [ ] Creare diagrammi di architettura

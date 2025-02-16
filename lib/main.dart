@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mcsm/presentation/providers/java/java_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'presentation/screens/home/home_screen.dart';
-import 'data/datasources/remote/settings_service.dart';
 import 'core/theme/app_theme.dart';
-
+import 'data/datasources/remote/settings_service.dart';
+import 'data/repositories/settings_repository_impl.dart';
+import 'domain/repositories/settings_repository.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -14,15 +16,13 @@ void main() async {
     WidgetsFlutterBinding.ensureInitialized();
 
     final settingsService = SettingsService();
-    await settingsService.init();
+    final ISettingsRepository settingsRepository = SettingsRepositoryImpl(settingsService);
+    await settingsRepository.init();
 
-    final settings = await settingsService.loadSettings();
-    print('Settings loaded:');
-    print('Server path: ${settings.serverPath}');
-    print('Java path: ${settings.javaPath}');
-    print('Backup path: ${settings.backupSettings.backupPath}');
+    // !TODO: adding logging
+    //final settings = await settingsRepository.getSettings();
 
-    // Inizializza window manager
+
     await windowManager.ensureInitialized();
     WindowOptions windowOptions = const WindowOptions(
       size: Size(1200, 800),
@@ -40,11 +40,11 @@ void main() async {
 
     runApp(
       ProviderScope(
-        child: MaterialApp(
-          theme: AppTheme.darkTheme,
-          debugShowCheckedModeBanner: false,
-          home: MCSMApp(navigatorKey: navigatorKey),
-        )
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            debugShowCheckedModeBanner: false,
+            home: MCSMApp(navigatorKey: navigatorKey),
+          )
       ),
     );
   } catch (e, stack) {
